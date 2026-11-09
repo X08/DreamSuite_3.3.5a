@@ -1,0 +1,30 @@
+## Interface: 30300
+## Title: DreamSuite |cff888888by|r |cffffc800X08|r |cff888888|||r |cffff7d0aDreamwind (Chromiecraft-EU)|r
+## Notes: All the X08 addons in one: switch each module on or off and change its settings from one window.
+## Author: X08 || Dreamwind (Chromiecraft-EU)
+## Version: 0.10.27.25
+## SavedVariables: DreamSuiteDB
+## SavedVariablesPerCharacter: DreamSuiteCharDB
+## X-X08-Slash: /ds
+
+Core\Core.lua
+Core\Changelog.lua
+UI\Widgets.lua
+Core\Options.lua
+UI\Hub.lua
+UI\Wizard.lua
+UI\Minimap.lua
+
+Modules\URLify\URLify.lua
+Modules\BulkBag\BulkBag.lua
+Modules\CraftLinker\CraftLinker.lua
+Modules\GCDDot\GCDDot.lua
+Modules\FadeOut\FadeOut.lua
+Modules\OrbMeter\OrbMeter_core.lua
+Modules\OrbMeter\OrbMeter.lua
+Modules\RarityBorders\RarityBorders.lua
+Modules\InventoryPlus\Core.lua
+Modules\InventoryPlus\Tabs.lua
+Modules\InventoryPlus\Warehouse.lua
+Modules\InventoryPlus\Upgrades.lua
+Modules\InventoryPlus\Options.lua
