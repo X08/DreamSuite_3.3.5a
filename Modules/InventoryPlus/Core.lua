@@ -127,13 +127,11 @@ BT.SUGGESTED = {
 
 function BT:ApplySuggested()
     for bag, defs in pairs(BT.SUGGESTED) do
-        local tabs = {}
+        local set = {}                       -- one tab per bag, holding every category listed for it
         for _, cats in ipairs(defs) do
-            local set = {}
             for _, k in ipairs(cats) do set[k] = true end
-            tabs[#tabs + 1] = { cats = set }
         end
-        self.chardb.bags[bag] = tabs
+        self.chardb.bags[bag] = { { cats = set } }
     end
     self.db.ignore[HEARTHSTONE] = true
     for _, bag in ipairs(BT.INV_BAGS) do

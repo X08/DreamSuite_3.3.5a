@@ -337,11 +337,11 @@ local function BuildThanks()
 
     local sub = fx:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     sub:SetPoint("TOP", fx, "TOP", 0, -158)
-    sub:SetWidth(560)
-    sub:SetText("To everyone who played along, tested, nagged and cheered while these addons grew.")
+    sub:SetWidth(640)
+    sub:SetText("To everyone I've met in WoW all these years. To those that bring joy and laughter into our near daily conversations and who inspire me to tinker away and create without judgement and to those who helped out and tested it for many, many days.")
 
     local who = fx:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    who:SetPoint("TOP", fx, "TOP", 0, -194)
+    who:SetPoint("TOP", fx, "TOP", 0, -226)
     who:SetWidth(560)
     who:SetText("The whole |cff40ff40<" .. DS.THANKS.guild .. ">|r crew;")
 
@@ -358,27 +358,27 @@ local function BuildThanks()
         local c = CLASS_COLOR[n[2] or ""] or { 1, 0.82, 0 }
         fs:SetText(n[1])
         fs:SetTextColor(c[1], c[2], c[3])
-        nameFs[i] = { fs = fs, x = x, y = -230 - row * 36, ph = i * 0.7 }
+        nameFs[i] = { fs = fs, x = x, y = -262 - row * 36, ph = i * 0.7 }
     end
 
     local others = fx:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    others:SetPoint("TOP", fx, "TOP", 0, -304)
+    others:SetPoint("TOP", fx, "TOP", 0, -336)
     others:SetWidth(700)
     others:SetText("and everyone else, including the former |cff6699ff<Blades of Wrynn>|r guild on Turtle WoW (Tel'Abim-PvP)")
 
     -- the cats
     local catsLine = fx:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    catsLine:SetPoint("TOP", fx, "TOP", 0, -346)
+    catsLine:SetPoint("TOP", fx, "TOP", 0, -378)
     catsLine:SetWidth(560)
     catsLine:SetText("And a little thanks to my two cats")
     local plate = fx:CreateTexture(nil, "ARTWORK")
     plate:SetTexture(GLOW); plate:SetBlendMode("ADD")
     plate:SetWidth(150); plate:SetHeight(60)
     plate:SetVertexColor(0.55, 0.55, 0.6, 0.45)
-    plate:SetPoint("TOP", fx, "TOP", 62, -360)
+    plate:SetPoint("TOP", fx, "TOP", 62, -392)
     local lea = fx:CreateFontString(nil, "OVERLAY")
     lea:SetFont("Fonts\\FRIZQT__.TTF", 28, "OUTLINE")
-    lea:SetPoint("TOP", fx, "TOP", -62, -370)
+    lea:SetPoint("TOP", fx, "TOP", -62, -402)
     lea:SetText("Lea"); lea:SetTextColor(1, 0.5, 0.04)
     local oriL = {}                                   -- tabby: black and white patches
     local oriCol = { { 1, 1, 1 }, { 0.1, 0.1, 0.1 }, { 0.9, 0.9, 0.9 } }
@@ -391,10 +391,15 @@ local function BuildThanks()
         fs:SetTextColor(c[1], c[2], c[3])
         local w = fs:GetStringWidth() or 0
         if w == 0 then w = 18 end
-        fs:SetPoint("TOPLEFT", fx, "TOP", ox, -370)
+        fs:SetPoint("TOPLEFT", fx, "TOP", ox, -402)
         ox = ox + w
         oriL[i] = fs
     end
+
+    local foryou = fx:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    foryou:SetPoint("TOP", fx, "TOP", 0, -446)
+    foryou:SetWidth(640)
+    foryou:SetText("And to you for using this addon. Thank you.")
 
     local credit = fx:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     credit:SetPoint("BOTTOM", fx, "BOTTOM", 0, 34)
@@ -438,7 +443,7 @@ local function BuildThanks()
         local ca = Clamp01((t - 3.8) / 0.7)
         catsLine:SetAlpha(ca); lea:SetAlpha(ca); plate:SetAlpha(ca * (0.7 + 0.3 * math.sin(t * 1.5)))
         for _, fs in ipairs(oriL) do fs:SetAlpha(ca) end
-        credit:SetAlpha(Clamp01(t - 4.5)); closeHint:SetAlpha(Clamp01(t - 4.5) * (0.5 + 0.5 * math.sin(t * 2)))
+        foryou:SetAlpha(Clamp01((t - 5) / 0.8)); credit:SetAlpha(Clamp01(t - 4.5)); closeHint:SetAlpha(Clamp01(t - 4.5) * (0.5 + 0.5 * math.sin(t * 2)))
     end)
 end
 

@@ -6,7 +6,7 @@
 DreamSuite = DreamSuite or {}
 local DS = DreamSuite
 
-DS.VERSION  = "0.10.27.25"
+DS.VERSION  = "0.10.27.26"
 DS.PREFIX   = "DREAMSUITE"
 DS.ICONS    = "Interface\\AddOns\\DreamSuite\\Icons\\"
 DS.REPO     = "https://github.com/X08/DreamSuite_3.3.5a"

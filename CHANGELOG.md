@@ -11,6 +11,14 @@
 
 Numbers don't roll over at 9 (`0.4.3.106` is fine). Every change below is tallied here; the files themselves carry no change notes.
 
+## 0.10.27.26 (2026-11-09 19:41)
+
+- c: InventoryPlus Warehouse: picking a category or sub-category crossfades the list; hovering one in the tree keeps its items bright and dims the rest
+- c: InventoryPlus: the suggested setup now makes one tab per bag holding all of that bag's categories (instead of several tabs per bag)
+- d: InventoryPlus Organize page: "Follow the server's speed" sits under the speed slider; "Organize all now" and "Sort tabbed bags" are in the bottom row on the right
+- d: Wizard: the InventoryPlus page says tabs can be dragged onto each other to merge them; hint is written "(!)"
+- d: Thank-you page: new opening paragraph and a closing line "And to you for using this addon. Thank you."; layout moved down to fit
+
 ## 0.10.27.25 (2026-11-09 01:44)
 
 - d: Change log: back to the first layout (a scroll frame with one text block per release) after reports of memory trouble; dates and tags are kept. New `/ds memory` prints DreamSuite's memory use

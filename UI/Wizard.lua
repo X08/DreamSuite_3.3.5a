@@ -63,10 +63,10 @@ local INFO = {
         "Items you cannot use get a red tint.",
     },
     InventoryPlus = {
-        "Tabs on the side of your bags that hold one kind of item each.",
+        "Tabs on the side of your bags hold one kind of item each. Drag a tab onto another to merge them.",
         "New loot is sent to the right bag, bags sort themselves, loose stacks are merged.",
         "A Warehouse shows what all your characters carry.",
-        "A small ! on your character window hints at an upgrade waiting in your bags.",
+        "A small (!) on your character window hints at an upgrade waiting in your bags.",
     },
 }
 

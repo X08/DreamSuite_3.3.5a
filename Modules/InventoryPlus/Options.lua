@@ -88,12 +88,12 @@ local function BuildTabsPage(page)
     sug:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Suggested setup", 1, 0.82, 0)
-        GameTooltip:AddLine("Bag 1: Quest, Reagents (Hearthstone kept in slot 1)", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 2: Gear + Weapons, Miscellaneous", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("Bag 1: Quest + Reagents (Hearthstone kept in slot 1)", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("Bag 2: Gear + Weapons + Miscellaneous", 0.9, 0.9, 0.9)
         GameTooltip:AddLine("Bag 3: Crafting", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 4: Consumables, Conjured", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 5: Raw Food, Junk", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Replaces the tabs on your five bags. Bank bags are left alone.", 1, 0.6, 0.3, true)
+        GameTooltip:AddLine("Bag 4: Consumables + Conjured", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("Bag 5: Raw Food + Junk", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("One tab per bag, holding all of the above. Replaces the tabs on your five bags. Bank bags are left alone.", 1, 0.6, 0.3, true)
         GameTooltip:Show()
     end)
     sug:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -269,14 +269,14 @@ local function BuildOrganizePage(page)
     end)
     sp.Refresh = function() sp:SetValue(db.opDelay or 0.3); speedText(db.opDelay or 0.3) end
     add(sp)
-    add(Check(page, 468, -240, "Follow the server's speed",
+    add(Check(page, 230, -240, "Follow the server's speed",
         function() return db.opAuto end, function(v) db.opAuto = v; speedText(db.opDelay or 0.3) end))
 
-    local b1 = Button(page, "Organize all now", 130, 24)
-    b1:SetPoint("TOPLEFT", 468, -214)
-    b1:SetScript("OnClick", function() BT:OrganizeAll() end)
     local b2 = Button(page, "Sort tabbed bags", 120, 24)
-    b2:SetPoint("LEFT", b1, "RIGHT", 6, 0)
+    b2:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 4)
+    local b1 = Button(page, "Organize all now", 130, 24)
+    b1:SetPoint("RIGHT", b2, "LEFT", -6, 0)
+    b1:SetScript("OnClick", function() BT:OrganizeAll() end)
     b2:SetScript("OnClick", function()
         BT:After(function() BT:SortTabbed("inv") end)
         if BT.bankOpen then BT:After(function() BT:SortTabbed("bank") end) end
@@ -617,8 +617,17 @@ local function BuildWarehousePage(page)
         r.text:SetPoint("LEFT", 4, 0); r.text:SetWidth(142); r.text:SetJustifyH("LEFT")
         r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         r:SetScript("OnClick", function(self)
-            whClass, whSub = self.class, self.sub
-            page:Update()
+            local class, sub = self.class, self.sub
+            if class == whClass and sub == whSub then return end
+            page:Crossfade(function() whClass, whSub = class, sub; page:Update() end)
+        end)
+        r:SetScript("OnEnter", function(self)
+            if self.class then page.hoverClass, page.hoverSub = self.class, self.sub else page.hoverClass, page.hoverSub = nil, nil end
+            page:ApplyHover()
+        end)
+        r:SetScript("OnLeave", function()
+            page.hoverClass, page.hoverSub = nil, nil
+            page:ApplyHover()
         end)
         page.treeRows[i] = r
     end
@@ -679,6 +688,41 @@ local function BuildWarehousePage(page)
     page.info = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     page.info:SetPoint("BOTTOMLEFT", 0, 0)
     page.info:SetWidth(720); page.info:SetHeight(12); page.info:SetJustifyH("LEFT")
+
+    -- hovering a category (or sub-category) in the tree: its items stay bright, the rest dims
+    function page:ApplyHover()
+        local hc, hs = self.hoverClass, self.hoverSub
+        for _, ln in ipairs(self.lines) do
+            for _, cell in ipairs(ln.cells) do
+                local e = cell.entry
+                local a = 1
+                if hc and e then
+                    if not (e.t == hc and (not hs or e.s == hs)) then a = 0.18 end
+                end
+                cell:SetAlpha(a)
+            end
+        end
+    end
+
+    -- picking a category: the list fades out, switches, and fades back in
+    local fx = CreateFrame("Frame", nil, page)
+    local function SetGridAlpha(a) for _, ln in ipairs(page.lines) do ln:SetAlpha(a) end end
+    page:SetScript("OnShow", function() fx:SetScript("OnUpdate", nil); SetGridAlpha(1) end)
+    function page:Crossfade(change)
+        if not self:IsShown() then change(); return end
+        local t, switched = 0, false
+        fx:SetScript("OnUpdate", function(f, e)
+            t = t + e
+            if not switched then
+                SetGridAlpha(math.max(0, 1 - t / 0.09))
+                if t >= 0.09 then switched = true; t = 0; change() end
+            else
+                local a = math.min(1, t / 0.14)
+                SetGridAlpha(a)
+                if a >= 1 then f:SetScript("OnUpdate", nil) end
+            end
+        end)
+    end
 
     function page:Update()
         -- category tree: "All items", then classes; the selected class opens into its subclasses
@@ -756,6 +800,7 @@ local function BuildWarehousePage(page)
                 ln:Show()
             end
         end
+        self:ApplyHover()
         self.info:SetText(#sections == 0 and "No characters scanned yet." or
             (#sections .. " character(s). Click a name to minimise it. Bank contents refresh when you visit the bank."))
     end
