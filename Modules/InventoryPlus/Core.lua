@@ -102,12 +102,11 @@ local DEFAULTS = {
     routing = true, sortAfter = false, sortMode = "quality", dimAlpha = 0.22,
     side = "LEFT", showPlus = true, anim = true, manualLayout = true, colAnchor = "blizzard", colGap = 36, colWidth = 0, tooltip = true,
     offsetX = 0, offsetY = 0,
-    junkDelete = false, junkMax = 100, junkMode = "item", optOpen = "last", junkReport = true, junkLog = {}, debug = false,
+    junkDelete = false, junkMax = 100, greyDelete = true, whiteDelete = false, whiteMax = 50, optOpen = "last", junkReport = true, junkLog = {}, debug = false,
     ignore = {}, catTooltip = false, ignoreMark = true, whCollapsed = {},
     shardDelete = false, shardMax = 20,
     opDelay = 0.3,                 -- pause between two moves while sorting / routing (seconds), used when opAuto is off
     autoMerge = true,              -- merge loose partial stacks of the same item inside a bag when things go quiet
-    upgradeHint = true,            -- tiny "!" on character slots when the bags hold an upgrade
     sortButton = true,             -- "Sort All" button above the first row of the backpack
     opAuto = true,                 -- follow what the server allows: pause = measured round trip, backing off on trouble
     chars = {}, items = {},
@@ -1070,7 +1069,7 @@ function BT:ProcessArrivals()
         else
             local cat = self:Classify(link, a.bag, a.slot)
             local handled = false
-            if cat == "Junk" and db.junkDelete then
+            if db.junkDelete then
                 local del, value, count = self:ShouldDelete(link, a)
                 if del then
                     self:QueueDelete(a.bag, a.slot, value, count)
@@ -1136,21 +1135,25 @@ function BT:CheckExcess()
     return true
 end
 
--- looted junk only: must be worth less than the limit, and the loot window must have just been used
+-- looted grey (and optionally white) items only: each must be worth less than its limit per item, and the
+-- loot window must have just been used
 function BT:ShouldDelete(link, a)
     if self:IsIgnored(link) then return false end
+    local _, _, quality, _, _, itype, _, _, _, _, price = GetItemInfo(link)
+    local limit
+    if quality == 0 and self.db.greyDelete then limit = self.db.junkMax or 0
+    elseif quality == 1 and self.db.whiteDelete then limit = self.db.whiteMax or 0
+    else return false end
     if GetTime() - (self.lootTime or 0) > 4 then
-        self:Debug("%s: junk, but not looted just now - kept", link); return false
+        self:Debug("%s: not looted just now - kept", link); return false
     end
-    local _, _, _, _, _, itype, _, _, _, _, price = GetItemInfo(link)
     if itype == "Quest" then return false end
     if GetContainerItemQuestInfo and (GetContainerItemQuestInfo(a.bag, a.slot)) then return false end
     if not price then self:Debug("%s: no vendor price known - kept", link); return false end
     local _, count = GetContainerItemInfo(a.bag, a.slot)
     count = count or 1
-    local value = (self.db.junkMode == "stack") and (price * count) or price     -- per item unless set to per stack
-    if value < self:JunkLimit() then return true, price * count, count end
-    self:Debug("%s: worth %s, limit %s - kept", link, self:Money(value), self:Money(self:JunkLimit()))
+    if price < limit then return true, price * count, count end
+    self:Debug("%s: worth %s each, limit %s - kept", link, self:Money(price), self:Money(limit))
     return false
 end
 
@@ -1279,8 +1282,6 @@ function M.OnSlash(msg)
         end
     elseif cmd == "wh" or cmd == "warehouse" then
         if BT.Options then BT.Options:Show("warehouse", rest) end
-    elseif cmd == "upgrades" then
-        if BT.Upgrades then BT.Upgrades:Kick(); BT.Upgrades:Scan(); BT.Upgrades:Report() end
     elseif cmd == "debug" then
         BT.db.debug = not BT.db.debug
         BT:Print("debug " .. (BT.db.debug and "on: routing decisions are printed" or "off"))
@@ -1306,7 +1307,6 @@ function M.OnEnable()
     end)
     for _, e in ipairs(EVENTS) do frame:RegisterEvent(e) end
     frame:SetScript("OnUpdate", OnUpdate)
-    if BT.Upgrades then BT.Upgrades:Kick() end
     BT:PLAYER_ENTERING_WORLD()        -- fresh baseline: what is in the bags now is not "loot"
     if BT.WH then BT.WH:MarkDirty() end
 end

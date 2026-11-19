@@ -22,7 +22,8 @@ Copy the `DreamSuite` folder to `Interface\AddOns\`. If you still have the old s
 | GCDDot | Movable dot that fills with the GCD, plus a swing timer ring | `/gcd` |
 | FadeOut | Fades chosen UI elements out of combat, back in on combat or mouseover | `/fadeout` |
 | RarityBorders | Quality-colored borders on bag / bank / character items, optional sparkles, comet trail and holographic shimmer, red tint on unusable items. Works with Bagnon and ElvUI | `/rb` |
-| InventoryPlus | Category tabs on your bags: hover to highlight a type, route loot to the right bag, sort, auto-delete cheap junk, ignore list, and a Warehouse of what every character carries. Switched on/off after combat | `/ip` |
+| InventoryPlus | Category tabs on your bags: hover to highlight a type, route loot to the right bag, sort, auto-delete cheap grey (and optionally white) loot, ignore list, and a Warehouse of what every character carries. Switched on/off after combat | `/ip` |
+| DreamScore | Rates every item for your class and spec (stats valued by the spec's stat priority) and shows on the tooltip how it compares with what you wear. Every class and spec; weights blend from the average of all specs to your main spec as you spend talent points | `/dscore` |
 | OrbMeter | Orb with your damage / healing per second, a threat ring, hover and raid-lead panels, reports. Registers with FadeOut when both are on | `/om` |
 
 ## The window
@@ -60,7 +61,8 @@ DreamSuite/
     FadeOut/      FadeOut.lua
     OrbMeter/     OrbMeter_core.lua  OrbMeter.lua  media/piewheel.tga
     RarityBorders/ RarityBorders.lua
-    InventoryPlus/ Core.lua  Tabs.lua  Warehouse.lua  Options.lua
+    InventoryPlus/ Core.lua  Tabs.lua  Warehouse.lua  Upgrades.lua  Options.lua
+    DreamScore/   DreamScore.lua
 ```
 
 ## Adding a module

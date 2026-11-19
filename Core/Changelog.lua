@@ -1,6 +1,78 @@
 -- generated from CHANGELOG.md by gen_changelog.py; do not edit by hand
 local DS = DreamSuite
 DS.CHANGELOG = {
+  { ver = "0.11.36.43", date = "2026-11-19 01:17", items = {
+    { "d", "Right-clicking a character in the Warehouse overview now opens a small dropdown menu with \"Clear character\" (which asks to confirm)" },
+  } },
+  { ver = "0.11.36.42", date = "2026-11-17 02:43", items = {
+    { "c", "InventoryPlus Warehouse: right-click a character in the overview to clear that character's stored data (asks first; only the Warehouse record is removed)" },
+  } },
+  { ver = "0.11.35.42", date = "2026-11-15 20:42", items = {
+    { "c", "InventoryPlus auto-delete: the \"whole stack\" value comparison is gone (it did not work and would need stack limits per item); the limit is now always per item. New switches for grey items and for white items, each with its own \"worth less than\" box (white defaults to off, 50c), and the sub-options grey out when auto-delete is off. Quest items, the ignore list and anything not freshly looted are still never touched" },
+  } },
+  { ver = "0.11.34.42", date = "2026-11-15 20:35", items = {
+    { "c", "DreamScore tells bear Feral Druids from cat ones by their talents (more ranks in Protector of the Pack, Natural Reaction, Primal Gore and Thick Hide than in Shredding Attacks, Predatory Strikes, Predatory Instincts and Savage Fury = bear) and uses the bear weights (stamina, armor, dodge, expertise) for a bear build; the spec shows as \"Feral (bear)\" or \"Feral (cat)\"" },
+  } },
+  { ver = "0.11.33.42", date = "2026-11-15 20:30", items = {
+    { "d", "DreamScore now counts gem, enchant and socket-bonus lines for every stat, not only caster ones (attack power, strength, agility, stamina, hit, expertise, armor penetration, defense, dodge, parry, block, armor), so e.g. +24 Attack Power on bracers is no longer ignored. \"All Stats\" now covers all five primary stats" },
+  } },
+  { ver = "0.11.33.41", date = "2026-11-12 02:38", items = {
+    { "d", "The setup wizard's DreamScore preview was drawn under its own panel and looked dim; the text now sits on top, in full brightness" },
+  } },
+  { ver = "0.11.33.40", date = "2026-11-12 01:41", items = {
+    { "d", "DreamScore settles faster after logging in: the spec, the upgrade hints and the total are re-checked every second for 10 seconds after login, a loading screen, or a talent change" },
+  } },
+  { ver = "0.11.33.39", date = "2026-11-12 01:03", items = {
+    { "d", "The DreamScore total on the character window moved 2 px down" },
+  } },
+  { ver = "0.11.33.38", date = "2026-11-12 01:02", items = {
+    { "d", "The DreamScore total on the character window moved 10 px back up" },
+  } },
+  { ver = "0.11.33.37", date = "2026-11-12 01:01", items = {
+    { "d", "The DreamScore total on the character window sits 20 px lower and 4 px further right, in the middle of the black space" },
+  } },
+  { ver = "0.11.33.36", date = "2026-11-12 01:00", items = {
+    { "d", "The DreamScore total on the character window is centred in the free space beside the weapon slots" },
+  } },
+  { ver = "0.11.33.35", date = "2026-11-12 00:59", items = {
+    { "d", "The DreamScore total on the character window moved up to the weapon row, clear of the frame edge and tabs" },
+  } },
+  { ver = "0.11.33.34", date = "2026-11-12 00:56", items = {
+    { "d", "The DreamScore total on the character window was drawn underneath the window's artwork and so not visible; it now sits above it" },
+  } },
+  { ver = "0.11.33.33", date = "2026-11-12 00:53", items = {
+    { "c", "DreamScore: option to score trinkets and relics/idols by item level (their effects can't be valued by stats), and an option to show your total DreamScore on the character window, under the trinkets beside the weapon slots (both in the DreamScore panel)" },
+    { "d", "The tooltip line now reads \"DreamScore: (Restoration) 200\"; the setup wizard's DreamScore preview is lighter and easier to read" },
+  } },
+  { ver = "0.11.32.33", date = "2026-11-11 23:05", items = {
+    { "c", "DreamScore now covers every class: weights for all 27 specs (Warrior, Paladin, Hunter, Rogue, Priest, Death Knight, Shaman, Mage, Warlock, Druid), taken from the WotLK stat priorities of Icy Veins, Warcraft Tavern and similar guides, converted to numbers by judgment (weapon DPS values are estimates; Death Knight Blood is treated as the tank tree; Feral uses cat weights). Weights follow your talents: with no points the three specs of your class are averaged, every point in your main tree moves towards that spec, and 31 points make it 100%. The tooltip shows e.g. \"(Restoration 32%)\" while blending and /dscore weights explains it" },
+  } },
+  { ver = "0.11.31.33", date = "2026-11-11 00:39", items = {
+    { "c", "DreamScore: effects of meta gems can be worked out into stats by hand (DS.DreamScore.GEM_EFFECTS, matched by gem name). First entry: Insightful Earthsiege Diamond = 60 mp5 (600 mana per proc, 15 s cooldown, about 60 mp5 measured)" },
+    { "d", "Restoration Druid weights: mp5 lowered from 2.0 to 0.5 (IcyVeins is the outlier; Warcraft Tavern, Espway and WotLK Helper rank it last or treat it as a 700+ target)" },
+  } },
+  { ver = "0.11.30.32", date = "2026-11-10 12:42", items = {
+    { "d", "DreamScore tooltip: the item you are wearing shows only its score (no \"+0% vs worn\"); the line no longer repeats the class (\"DreamScore (Restoration)\")" },
+  } },
+  { ver = "0.11.30.31", date = "2026-11-10 12:39", items = {
+    { "d", "DreamScore: gems were not counted (a gem's stats are an enchantment, not item stats). Gem and enchant stats are now read from the item's tooltip (the lines the item has beyond its bare version), so socketed gems and enchants such as \"+8 All Stats\" count. An item with matching gems and an enchant now beats the same item bare" },
+  } },
+  { ver = "0.11.30.30", date = "2026-11-10 12:25", items = {
+    { "c", "DreamScore counts socketed gems and active socket bonuses. The item's own stats are read with the gems taken out of the link, then each gem's stats are added (so nothing is counted twice whichever way GetItemStats behaves); empty sockets still get the credit from the options; an active socket bonus is read from the item's tooltip (English clients). Enchants are not counted yet. Scores are cached per item link" },
+    { "d", "Item scores are not cached while a gem's data is still loading" },
+  } },
+  { ver = "0.11.29.29", date = "2026-11-10 01:50", items = {
+    { "d", "DreamScore upgrade hint: also reacts to UNIT_INVENTORY_CHANGED, re-detects the spec if it was unavailable, and /dscore upgrades now lists every equippable bag item with the reason it did or did not count (level, armor type, unreadable stats, score vs worn)" },
+  } },
+  { ver = "0.11.29.28", date = "2026-11-10 01:41", items = {
+    { "c", "The upgrade hint moved from InventoryPlus to DreamScore and now compares by DreamScore instead of item level: a (!) on a character slot when a bag item is at least 1% better for your spec (and wearable at your level), hover shows it, click swaps. /dscore upgrades explains each slot. The InventoryPlus option and /ip upgrades are gone" },
+    { "d", "Wizard: the OrbMeter preview's threat ring sweeps visibly (drawn like the real orb: ring below, core above); DPS stays between about 700 and 1500 with calmer movement and the real \"1.1K\" number format" },
+  } },
+  { ver = "0.11.28.27", date = "2026-11-10 01:08", items = {
+    { "b", "DreamScore, a new module: every item gets a score for your class and spec (its stats valued by the spec's stat priority) shown on the tooltip with how it compares to the item you wear in that slot (/dscore, /dscore weights). Items with procs or Use: effects are marked \"effect not counted\". First spec: Restoration Druid (weights from the IcyVeins WotLK Classic stat priority; edit them in DS.DreamScore.SPECS)" },
+    { "c", "Wizard page and hub row for DreamScore" },
+    { "d", "Hub rows slightly shorter so nine modules fit in the window" },
+  } },
   { ver = "0.10.27.26", date = "2026-11-09 19:41", items = {
     { "c", "InventoryPlus Warehouse: picking a category or sub-category crossfades the list; hovering one in the tree keeps its items bright and dims the rest" },
     { "c", "InventoryPlus: the suggested setup now makes one tab per bag holding all of that bag's categories (instead of several tabs per bag)" },

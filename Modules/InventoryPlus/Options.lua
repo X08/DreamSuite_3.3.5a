@@ -65,6 +65,42 @@ StaticPopupDialogs["INVENTORYPLUS_CLEARALL"] = {
     timeout = 0, whileDead = 1, hideOnEscape = 1, showAlert = 1,
 }
 
+StaticPopupDialogs["INVENTORYPLUS_CLEARCHAR"] = {
+    text = "Remove the Warehouse data of %s?\n\nOnly the stored list of what that character carries is removed, nothing in the game. %s",
+    button1 = "Clear character", button2 = CANCEL,
+    OnAccept = function(self, key) BT.WH:ClearCharacter(key) end,
+    timeout = 0, whileDead = 1, hideOnEscape = 1, showAlert = 1,
+}
+
+-- the right-click menu on a character in the overview
+local charMenu
+local function CharMenu(key)
+    if not charMenu then
+        charMenu = CreateFrame("Frame", "InventoryPlusCharMenu", UIParent, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(charMenu, function()
+            local k = charMenu.key
+            local rec = k and BT.db.chars[k]
+            if not rec then return end
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = BT.WH:CharName(rec, k); info.isTitle = true; info.notCheckable = true
+            UIDropDownMenu_AddButton(info)
+            info = UIDropDownMenu_CreateInfo()
+            info.text = "Clear character"; info.notCheckable = true
+            info.func = function()
+                local note = (k == BT.WH:Key()) and "This is the character you are playing; it is stored again the next time your bags change." or "This cannot be undone."
+                StaticPopup_Show("INVENTORYPLUS_CLEARCHAR", BT.WH:CharName(rec, k), note, k)
+            end
+            UIDropDownMenu_AddButton(info)
+            info = UIDropDownMenu_CreateInfo()
+            info.text = CANCEL; info.notCheckable = true
+            UIDropDownMenu_AddButton(info)
+        end, "MENU")
+    end
+    charMenu.key = key
+    ToggleDropDownMenu(1, nil, charMenu, "cursor", 0, 0)
+end
+BT.CharMenu = CharMenu
+
 -- ============================================================ page: Tabs
 local function BuildTabsPage(page)
     page.bagBtns = {}
@@ -227,8 +263,6 @@ local function BuildOrganizePage(page)
         function() return db.catTooltip end, function(v) db.catTooltip = v end))
     add(Check(page, 300, -96, "\"Sort All\" button on the backpack",
         function() return db.sortButton end, function(v) db.sortButton = v; for i = 1, (NUM_CONTAINER_FRAMES or 13) do local f = _G["ContainerFrame" .. i]; if f and f:GetID() == 0 then BT:UpdateSortButton(f) end end end))
-    add(Check(page, 0, -120, "Upgrade hint (!) on the character window",
-        function() return db.upgradeHint end, function(v) db.upgradeHint = v; if BT.Upgrades then BT.Upgrades:Kick() end end))
     add(Check(page, 300, -72, "Mark ignored items in your bags",
         function() return db.ignoreMark end, function(v) db.ignoreMark = v; BT:RefreshTabs() end))
 
@@ -404,37 +438,53 @@ local function BuildJunkPage(page)
     warn:SetPoint("TOPLEFT", 0, 0); warn:SetWidth(580); warn:SetJustifyH("LEFT")
     warn:SetText("Cheap grey items are destroyed the moment you loot them. This cannot be undone.")
 
-    add(Check(page, 0, -28, "Delete looted grey (poor quality) items worth less than the limit below",
-        function() return db.junkDelete end, function(v) db.junkDelete = v end))
-    add(Check(page, 0, -52, "Say in chat what was deleted",
+    local subs = {}              -- everything that depends on the master switch
+    local function sub(w) subs[#subs + 1] = w; return add(w) end
+    local function Master() return db.junkDelete end
+
+    add(Check(page, 0, -28, "Automatically delete looted items (choose which below)",
+        function() return db.junkDelete end,
+        function(v) db.junkDelete = v; page:Refresh() end))
+    sub(Check(page, 20, -52, "Say in chat what was deleted",
         function() return db.junkReport end, function(v) db.junkReport = v end))
 
-    local lbl = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lbl:SetPoint("TOPLEFT", 4, -92); lbl:SetText("Limit")
-    local eb = CreateFrame("EditBox", "InventoryPlusJunkLimit", page, "InputBoxTemplate")
-    eb:SetWidth(110); eb:SetHeight(20); eb:SetAutoFocus(false)
-    eb:SetPoint("LEFT", lbl, "RIGHT", 14, 0)
-    eb.Refresh = function() eb:SetText(BT:Money(db.junkMax, "")) end
-    local function apply()
-        local v = BT:ParseMoney(eb:GetText())
-        if v and v <= 100000000 then db.junkMax = v else BT:Print("could not read that amount, use e.g. 10g34s10c") end
-        eb.Refresh()
+    -- a "worth less than" box: money syntax, per item
+    local function LimitBox(name, y, key)
+        local lbl = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lbl:SetPoint("TOPLEFT", 48, y); lbl:SetText("Only if worth less than")
+        local eb = CreateFrame("EditBox", name, page, "InputBoxTemplate")
+        eb:SetWidth(110); eb:SetHeight(20); eb:SetAutoFocus(false)
+        eb:SetPoint("LEFT", lbl, "RIGHT", 14, 0)
+        local per = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        per:SetPoint("LEFT", eb, "RIGHT", 8, 0); per:SetText("each")
+        eb.label = lbl
+        eb.Refresh = function() eb:SetText(BT:Money(db[key], "")) end
+        local function apply()
+            local v = BT:ParseMoney(eb:GetText())
+            if v and v <= 100000000 then db[key] = v else BT:Print("could not read that amount, use e.g. 10g34s10c") end
+            eb.Refresh()
+        end
+        eb:SetScript("OnEnterPressed", function(s) apply(); s:ClearFocus() end)
+        eb:SetScript("OnEditFocusLost", apply)
+        eb:SetScript("OnEscapePressed", function(s) eb.Refresh(); s:ClearFocus() end)
+        return eb
     end
-    eb:SetScript("OnEnterPressed", function(s) apply(); s:ClearFocus() end)
-    eb:SetScript("OnEditFocusLost", apply)
-    eb:SetScript("OnEscapePressed", function(s) eb.Refresh(); s:ClearFocus() end)
-    add(eb)
-    add(Cycle(page, 270, -78, 130, "Compare the limit against",
-        function() return { { key = "item", label = "Each item" }, { key = "stack", label = "Whole stack" } } end,
-        function() return db.junkMode end, function(k) db.junkMode = k end))
-    local hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", 4, -124); hint:SetWidth(580); hint:SetJustifyH("LEFT")
-    hint:SetText("Amount syntax: 10g34s10c (gold, silver, copper; any part can be left out, e.g. 1s or 50c; a bare number counts as copper). Only fresh loot is touched: items taken from the bank, mail or a vendor are never deleted, and neither are quest items.")
 
-    add(Check(page, 0, -170, "Warlock: destroy Soul Shards above the limit below",
+    local greyCb = sub(Check(page, 20, -84, "Grey (poor quality) items",
+        function() return db.greyDelete end, function(v) db.greyDelete = v; page:Refresh() end))
+    local greyBox = LimitBox("InventoryPlusJunkLimit", -112, "junkMax"); sub(greyBox)
+    local whiteCb = sub(Check(page, 20, -144, "White (common quality) items: armor, weapons, reagents, food and more",
+        function() return db.whiteDelete end, function(v) db.whiteDelete = v; page:Refresh() end))
+    local whiteBox = LimitBox("InventoryPlusWhiteLimit", -172, "whiteMax"); sub(whiteBox)
+
+    local hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("TOPLEFT", 4, -202); hint:SetWidth(580); hint:SetJustifyH("LEFT")
+    hint:SetText("Amount syntax: 10g34s10c (gold, silver, copper; any part can be left out, e.g. 1s or 50c; a bare number counts as copper). Only fresh loot is touched: items taken from the bank, mail or a vendor are never deleted, and neither are quest items or items on the ignore list.")
+
+    add(Check(page, 0, -250, "Warlock: destroy Soul Shards above the limit below",
         function() return db.shardDelete end, function(v) db.shardDelete = v end))
     local kl = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    kl:SetPoint("TOPLEFT", 28, -202); kl:SetText("Keep at most")
+    kl:SetPoint("TOPLEFT", 28, -282); kl:SetText("Keep at most")
     local sb = CreateFrame("EditBox", "InventoryPlusShardLimit", page, "InputBoxTemplate")
     sb:SetWidth(44); sb:SetHeight(20); sb:SetAutoFocus(false)
     sb:SetPoint("LEFT", kl, "RIGHT", 12, 0)
@@ -453,16 +503,29 @@ local function BuildJunkPage(page)
     kn:SetText("Soul Shards in your bags. The surplus is destroyed from the last slots. Only on a Warlock; ignored shards are kept.")
 
     local lt = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    lt:SetPoint("TOPLEFT", 0, -232); lt:SetText("Recently deleted")
+    lt:SetPoint("TOPLEFT", 0, -312); lt:SetText("Recently deleted")
     page.log = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    page.log:SetPoint("TOPLEFT", 0, -252); page.log:SetWidth(580)
+    page.log:SetPoint("TOPLEFT", 0, -332); page.log:SetWidth(580)
     page.log:SetJustifyH("LEFT"); page.log:SetJustifyV("TOP")
 
+    local function SetOn(w, on)
+        if not w.label and w.Enable then
+            if on then w:Enable() else w:Disable() end
+        else                                         -- edit boxes: no Enable/Disable in 3.3.5
+            w:EnableMouse(on)
+            if not on then w:ClearFocus() end
+            w:SetTextColor(on and 1 or 0.5, on and 1 or 0.5, on and 1 or 0.5)
+            if w.label then w.label:SetTextColor(on and 1 or 0.5, on and 1 or 0.5, on and 1 or 0.5) end
+        end
+    end
     function page:Refresh()
         for _, w in ipairs(widgets) do if w.Refresh then w.Refresh(w) end end
+        local m = Master()
+        for _, w in ipairs(subs) do SetOn(w, m) end
+        SetOn(greyBox, m and db.greyDelete); SetOn(whiteBox, m and db.whiteDelete)
         local out = {}
         for i, e in ipairs(db.junkLog) do
-            if i > 8 then break end
+            if i > 6 then break end
             out[#out + 1] = tostring(e.link) .. ((e.count or 1) > 1 and (" x" .. e.count) or "") ..
                 "   " .. (e.reason == "excess" and "excess" or BT:Money(e.value))
         end
@@ -662,7 +725,12 @@ local function BuildWarehousePage(page)
         hd.rule:SetHeight(1)
         hd.rule:SetPoint("BOTTOMLEFT", 0, 3); hd.rule:SetPoint("BOTTOMRIGHT", 0, 3)
         hd.rule:SetTexture(1, 1, 1, 0.15)
-        hd:SetScript("OnClick", function(self)
+        hd:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        hd:SetScript("OnClick", function(self, button)
+            if button == "RightButton" then          -- right-click: a small menu with "Clear character"
+                if BT.db.chars[self.key] then CharMenu(self.key) end
+                return
+            end
             BT.db.whCollapsed[self.key] = (not BT.db.whCollapsed[self.key]) or nil
             page:Update()
         end)
@@ -802,9 +870,10 @@ local function BuildWarehousePage(page)
         end
         self:ApplyHover()
         self.info:SetText(#sections == 0 and "No characters scanned yet." or
-            (#sections .. " character(s). Click a name to minimise it. Bank contents refresh when you visit the bank."))
+            (#sections .. " character(s). Click a name to minimise it, right-click to clear that character. Bank contents refresh when you visit the bank."))
     end
 
+    BT.whPage = page
     function page:Refresh() BT.WH:Scan(); self:Update() end
 end
 

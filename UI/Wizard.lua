@@ -66,7 +66,12 @@ local INFO = {
         "Tabs on the side of your bags hold one kind of item each. Drag a tab onto another to merge them.",
         "New loot is sent to the right bag, bags sort themselves, loose stacks are merged.",
         "A Warehouse shows what all your characters carry.",
-        "A small (!) on your character window hints at an upgrade waiting in your bags.",
+    },
+    DreamScore = {
+        "Every item gets a score for your class and spec: its stats, valued by what that spec needs.",
+        "The tooltip says how it compares with the item you wear in that slot.",
+        "A small (!) on your character window hints at an upgrade waiting in your bags; click it to swap.",
+        "Unlike GearScore it is not the item level. Every class and spec is covered; with few talent points the specs are averaged, and 31 points in one tree make it fully that spec.",
     },
 }
 
@@ -294,28 +299,38 @@ D.FadeOut = function(box)
 end
 
 D.OrbMeter = function(box)
-    local base = box:CreateTexture(nil, "BACKGROUND")
-    base:SetPoint("TOPLEFT", box, "TOPLEFT", 40, -20); base:SetWidth(110); base:SetHeight(110)
-    base:SetTexture(ROUND); base:SetVertexColor(0, 0, 0, 0.6)
-    local ring = box:CreateTexture(nil, "ARTWORK")
-    ring:SetPoint("TOPLEFT", box, "TOPLEFT", 40, -20); ring:SetWidth(110); ring:SetHeight(110)
+    -- built like the real orb: the ring on a lower layer, the core (and number) on a higher one, so the
+    -- ring shows as a rim around the core, 1.5 times its size
+    local frame = CreateFrame("Frame", nil, box)
+    frame:SetPoint("TOPLEFT", box, "TOPLEFT", 30, -14); frame:SetWidth(120); frame:SetHeight(120)
+    local lvl = frame:GetFrameLevel()
+    local ringLayer = CreateFrame("Frame", nil, frame)
+    ringLayer:SetAllPoints(frame); ringLayer:SetFrameLevel(lvl + 1)
+    local base = ringLayer:CreateTexture(nil, "ARTWORK")
+    base:SetAllPoints(frame)
+    base:SetTexture(ROUND); base:SetVertexColor(1, 1, 1, 0.25)
+    local ring = ringLayer:CreateTexture(nil, "OVERLAY")
+    ring:SetAllPoints(frame)
     ring:SetTexture(PIE); ring:SetVertexColor(1, 0.3, 0.2, 0.95)
-    local mask = box:CreateTexture(nil, "OVERLAY")
-    mask:SetPoint("TOPLEFT", box, "TOPLEFT", 50, -30); mask:SetWidth(90); mask:SetHeight(90)
+    PieFraction(ring, 0.3)
+    local coreLayer = CreateFrame("Frame", nil, frame)
+    coreLayer:SetAllPoints(frame); coreLayer:SetFrameLevel(lvl + 3)
+    local mask = coreLayer:CreateTexture(nil, "ARTWORK")
+    mask:SetPoint("CENTER", frame, "CENTER"); mask:SetWidth(80); mask:SetHeight(80)
     mask:SetTexture(ROUND); mask:SetVertexColor(0.1, 0.35, 0.6, 1)
-    local num = box:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local num = coreLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     num:SetPoint("CENTER", mask, "CENTER", 0, 0)
     local lab = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    lab:SetPoint("TOP", mask, "BOTTOM", 0, -12); lab:SetText("damage per second")
+    lab:SetPoint("TOP", frame, "BOTTOM", 0, -4); lab:SetText("damage per second")
     Text(box, "The orb shows damage or healing per second.", 190, 26, 320, "GameFontHighlightSmall")
     Text(box, "The ring around it fills with your threat: full means you are about to pull the target.", 190, 52, 320, "GameFontHighlightSmall")
     Text(box, "Cast three healing spells in a row and it switches to healing by itself.", 190, 92, 320, "GameFontHighlightSmall")
     local t = 0
     box:SetScript("OnUpdate", function(_, e)
         t = t + e
-        local dps = 9000 + 3200 * math.sin(t * 1.3) + 900 * math.sin(t * 4.1)
-        num:SetText(string.format("%.1fk", dps / 1000))
-        PieFraction(ring, 0.5 + 0.4 * math.sin(t * 0.7))
+        local dps = 1100 + 330 * math.sin(t * 0.55) + 50 * math.sin(t * 1.9)         -- roughly 700 - 1500
+        num:SetText(dps >= 1000 and string.format("%.1fK", dps / 1000) or string.format("%d", dps))
+        PieFraction(ring, 0.5 + 0.42 * math.sin(t * 0.9))                          -- the threat ring sweeps back and forth
     end)
 end
 
@@ -391,6 +406,24 @@ D.InventoryPlus = function(box)
         Text(box, tab[1] .. " bag", bx + 22, 122, 128, "GameFontNormalSmall", tab[2][1], tab[2][2], tab[2][3], "CENTER")
     end
     Text(box, "Each tab holds one kind of item. Loot lands in its bag, sorting keeps each bag in order.", 14, 4, 500, "GameFontDisableSmall")
+end
+
+D.DreamScore = function(box)
+    local function Tip(x, title, tr, tg, tb, lines, last)
+        -- the text lives on the panel itself: text on the page behind a panel is drawn under its backdrop and looks dim
+        local pn = Panel(box, x, 14, 236, 118, 1)
+        pn:SetBackdropColor(0.08, 0.08, 0.1, 1)
+        Text(pn, title, 10, 8, 216, "GameFontNormal", tr, tg, tb)
+        for i, l in ipairs(lines) do Text(pn, l, 10, 8 + i * 14, 216, "GameFontHighlightSmall", 1, 1, 1) end
+        Text(pn, last, 10, 84, 216, "GameFontHighlightSmall", 1, 1, 1)
+    end
+    Tip(14, "Vestments of Renewal", 0.78, 0.45, 1,
+        { "+84 Intellect", "+66 Spirit", "+72 Haste Rating", "+95 Spell Power" },
+        "|cffffc800DreamScore:|r |cffaaaaaa(Restoration)|r 310  |cff40ff40+9%|r")
+    Tip(274, "Tunic of Brute Force", 0.78, 0.45, 1,
+        { "+80 Strength", "+70 Stamina", "+60 Hit Rating", "+40 Crit Rating" },
+        "|cffffc800DreamScore:|r |cffaaaaaa(Restoration)|r 4  |cffff4040-99%|r")
+    Text(box, "Same item level, very different value for a healer.", 14, 142, 500, "GameFontHighlightSmall", 0.8, 0.8, 0.8)
 end
 
 ------------------------------------------------------------

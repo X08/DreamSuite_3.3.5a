@@ -9,7 +9,7 @@ local DS = DreamSuite
 local C = DS.C
 
 local WIN_W, WIN_H = 800, 550
-local ROW_W, ROW_H = WIN_W - 52, 52
+local ROW_W, ROW_H = WIN_W - 52, 46
 local LIST_TOP = 78
 local FADE_TIME = 0.15
 
@@ -663,13 +663,13 @@ local function BuildCell(i, m)
     cell.badge:Hide()
 
     cell.title = cell:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    cell.title:SetPoint("TOPLEFT", cell, "TOPLEFT", 56, -8)
+    cell.title:SetPoint("TOPLEFT", cell, "TOPLEFT", 56, -6)
     cell.title:SetWidth(240)
     cell.title:SetJustifyH("LEFT")
     cell.title:SetText(m.title)
 
     cell.desc = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    cell.desc:SetPoint("TOPLEFT", cell.title, "BOTTOMLEFT", 0, -3)
+    cell.desc:SetPoint("TOPLEFT", cell.title, "BOTTOMLEFT", 0, -2)
     cell.desc:SetWidth(350); cell.desc:SetHeight(24)
     cell.desc:SetJustifyH("LEFT"); cell.desc:SetJustifyV("TOP")
     cell.desc:SetText(m.desc or "")

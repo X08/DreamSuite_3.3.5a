@@ -120,6 +120,14 @@ function WH:WhereText(b, k, e)
     return table.concat(parts, ", ")
 end
 
+-- removes one character's stored bags and bank (used by the right-click "Clear character")
+function WH:ClearCharacter(key)
+    if not key or not BT.db.chars[key] then return end
+    BT.db.chars[key] = nil
+    BT.db.whCollapsed[key] = nil
+    if BT.whPage and BT.whPage:IsShown() then BT.whPage:Update() end
+end
+
 function WH:CharName(rec, key)
     local nm = rec.name or key
     if rec.realm and rec.realm ~= GetRealmName() then nm = nm .. " (" .. rec.realm .. ")" end
