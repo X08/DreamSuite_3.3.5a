@@ -11,6 +11,23 @@
 
 Numbers don't roll over at 9 (`0.4.3.106` is fine). Every change below is tallied here; the files themselves carry no change notes.
 
+## 0.11.38.44 (2026-11-23 00:40)
+- c: DreamScore settings are split into three tabs: General, Scoring and Specs. The weights of every class and spec are now the Specs tab (/dscore specs still opens them in a window). Settings pages can hold a custom view for this
+- c: DreamScore: Hardcore is one tick that doubles the stamina weight of your spec (at least 0.20 for specs that hardly value it); the separate stamina slider is gone
+- d: DreamScore settings: the hit cap buttons got shorter names and the layout no longer overlaps
+
+## 0.11.37.44 (2026-11-23 00:16)
+- c: DreamScore has its new icon
+- c: DreamScore: "Show all specs and their weights" (settings, or /dscore specs) opens a window with every class and spec, the weights per stat, and the guides they come from listed at the bottom
+- c: DreamScore: Hardcore option: stamina is worth at least a chosen share (default 40%) of the main stat for every spec, because it is not all about damage
+- c: DreamScore: set bonuses that are plain stat grants now count. A bonus is split over the pieces it takes (a 2-piece bonus half to each of its two pieces, a 3-piece bonus a third to each of three), so the piece you look at and the pieces you wear share it
+- c: DreamScore: hit and defense caps. Hit rating counts in full up to the cap and at a reduced value past it (same level mobs, boss level mobs, or white hit for dual wielders; casters use spell hit), defense up to 540. What you have is read from the game, so gear, gems, buffs and talents are included. Settings: cap mode and how much a point keeps past the cap
+- c: DreamScore: /dscore audit lists, per worn item, what is read (gems, enchants, socket bonus, set bonus), what the spec does not value and which tooltip lines it cannot read
+- c: DreamScore: the (!) hint also looks at your bank and guild bank, as they were on your last visit (a guild bank tab counts once you have opened it); the tooltip says where the item is and clicking does not swap those
+
+## 0.11.36.44 (2026-11-21 00:45)
+- d: Warlock soul shard limit: a shard that landed loose in a normal bag because the soul bag was full is now destroyed first, instead of a shard from the soul bag's first slot leaving a stray one behind. Soul bags themselves are untouched by bag tab rules, as before
+
 ## 0.11.36.43 (2026-11-19 01:17)
 - d: Right-clicking a character in the Warehouse overview now opens a small dropdown menu with "Clear character" (which asks to confirm)
 

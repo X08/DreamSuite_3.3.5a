@@ -13,6 +13,9 @@
 --                      multiline: a framed box that wraps long text (at most one column wide)
 --                      (applied on Enter or when the box loses focus; Escape cancels)
 --   { type = "header", label }      { type = "text", text = string | function }
+--   { type = "frame", height, wide, build(parent) -> frame }
+--                      a custom view; wide = the full width of the page (both columns). The frame may have a
+--                      Refresh method, called whenever the settings refresh.
 --   { type = "tab", label }         starts a new tab; everything after it belongs to that tab
 --                                    (no tab entries = one plain page; items before the first
 --                                    tab entry go on a tab called "General")
@@ -440,9 +443,17 @@ local function AddEdit(c, m, o, y)
     return y + top + 30
 end
 
+local function AddFrame(c, m, o, y)
+    local ok, f = pcall(o.build, c)
+    if not ok then geterrorhandler()(f); return y + 4 end
+    f:SetPoint("TOPLEFT", c, "TOPLEFT", 0, -y)
+    Reg(c, o, { Refresh = function() if f.Refresh then f:Refresh() end end })
+    return y + (o.height or f:GetHeight() or 100)
+end
+
 local BUILDERS = {
     header = AddHeader, text = AddText, bool = AddBool, slider = AddSlider,
-    choice = AddChoice, color = AddColor, action = AddAction, edit = AddEdit,
+    choice = AddChoice, color = AddColor, action = AddAction, edit = AddEdit, frame = AddFrame,
 }
 
 -- flows built items into two columns inside `page` (a heading never ends a column on its own)
@@ -520,7 +531,7 @@ local function BuildContent(m, body)
         for _, o in ipairs(g.opts) do
             local item = CreateFrame("Frame", nil, page)
             item.root = root
-            item:SetWidth(CONTENT_W)
+            item:SetWidth(o.wide and (CONTENT_W * 2 + COL_GAP) or CONTENT_W)
             local build = BUILDERS[o.type or "bool"] or AddBool
             local h = build(item, m, o, 0)
             item:SetHeight(h)

@@ -500,7 +500,7 @@ local function BuildJunkPage(page)
     add(sb)
     local kn = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     kn:SetPoint("LEFT", sb, "RIGHT", 10, 0); kn:SetWidth(420); kn:SetJustifyH("LEFT")
-    kn:SetText("Soul Shards in your bags. The surplus is destroyed from the last slots. Only on a Warlock; ignored shards are kept.")
+    kn:SetText("Soul Shards in your bags. The surplus goes from the normal bags first, then from the last slots of a soul bag. Only on a Warlock; ignored shards are kept.")
 
     local lt = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     lt:SetPoint("TOPLEFT", 0, -312); lt:SetText("Recently deleted")

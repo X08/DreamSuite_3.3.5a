@@ -1102,7 +1102,7 @@ function BT:ProcessArrivals()
     end
 end
 
--- Warlocks: destroy Soul Shards above the limit (last slots first). Returns true when nothing is left to retry.
+-- Warlocks: destroy Soul Shards above the limit (shards outside a soul bag first, then last slots first). Returns true when nothing is left to retry.
 function BT:CheckExcess()
     local db = self.db
     if not db.shardDelete then return true end
@@ -1112,19 +1112,27 @@ function BT:CheckExcess()
     if self.baselineAt or #self.queue > 0 or CursorHasItem() then return false end
     local have, slots = 0, {}
     for _, bag in ipairs(self.INV_BAGS) do
+        local _, btype = GetContainerNumFreeSlots(bag)
+        local inSoulBag = bag ~= 0 and btype and bit.band(btype, 4) > 0      -- bag family 4 = soul bag
         for s = 1, (GetContainerNumSlots(bag) or 0) do
             local link = GetContainerItemLink(bag, s)
             if link and ItemID(link) == self.SOUL_SHARD then
                 local _, c = GetContainerItemInfo(bag, s)
                 c = c or 1
                 have = have + c
-                slots[#slots + 1] = { bag = bag, slot = s, n = c }
+                slots[#slots + 1] = { bag = bag, slot = s, n = c, soul = inSoulBag and true or false }
             end
         end
     end
+    -- shards in a soul bag are where they belong: surplus ones lying loose in the normal bags go first (a soul bag
+    -- that is full sends the newest shard to a normal bag), then the soul bag's own, last slots first
+    local order = {}
+    for i = #slots, 1, -1 do if not slots[i].soul then order[#order + 1] = slots[i] end end
+    for i = #slots, 1, -1 do if slots[i].soul then order[#order + 1] = slots[i] end end
+    slots = order
     local excess = have - (db.shardMax or 0)
     if excess <= 0 then return true end
-    for i = #slots, 1, -1 do
+    for i = 1, #slots do
         if excess <= 0 then break end
         local sl = slots[i]
         local take = math.min(sl.n, excess)

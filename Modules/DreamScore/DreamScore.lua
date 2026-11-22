@@ -22,6 +22,7 @@ M.api = DSC
 -- weights are relative to 1 point of spell power; keys are GetItemStats keys. The data lives in Specs.lua
 -- (DS.DreamScoreSpecs[CLASS][talent tree number] = { name, source, w = { [stat] = weight } }).
 DSC.SPECS = DS.DreamScoreSpecs or {}
+DSC.HARDCORE_MIN = 0.2        -- Hardcore: the least a point of stamina is worth, for specs that hardly value it
 DSC.FULL_POINTS = 31          -- talent points in one tree that count as fully committed to that spec
 
 local STAT_NAME = {
@@ -31,6 +32,11 @@ local STAT_NAME = {
     ITEM_MOD_CRIT_RATING_SHORT = "crit",
 }
 setmetatable(STAT_NAME, { __index = function(_, k) return (k:gsub("^ITEM_MOD_", ""):gsub("_SHORT$", ""):gsub("_", " "):lower()) end })
+
+function DSC.StatName(k)
+    local n = STAT_NAME[k] or k
+    return (n:gsub("^%l", string.upper))
+end
 
 -- equip location -> the character slots it competes for (the lowest-scoring one is compared)
 local SLOTS = {
@@ -47,7 +53,7 @@ local FALLBACK_LOC = { INVTYPE_TRINKET = true, INVTYPE_RELIC = true }   -- effec
 local TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }
 
 -- ============================================================ settings
-local defaults = { tooltip = true, compare = true, socketValue = 18, upgradeHint = true, itemLevelFallback = false, charTotal = true }
+local defaults = { tooltip = true, compare = true, socketValue = 18, upgradeHint = true, itemLevelFallback = false, charTotal = true, hardcore = false, includeBank = true, capMode = "boss", capFloor = 10 }
 local db
 local function DB()
     if not db then db = DS.GetDB("DreamScore", defaults) end
@@ -136,6 +142,12 @@ function DSC:Detect()
         source = string.format("%d%% %s, the rest the average of all three specs (%d of %d points)",
             math.floor(commit * 100 + 0.5), entries[best].name, bestPoints, DSC.FULL_POINTS)
     end
+    if DB().hardcore then       -- hardcore: it is not all about damage, so stamina counts double (and never nothing)
+        local copy = {}
+        for k2, v2 in pairs(w) do copy[k2] = v2 end
+        copy.ITEM_MOD_STAMINA_SHORT = math.max((w.ITEM_MOD_STAMINA_SHORT or 0) * 2, DSC.HARDCORE_MIN)
+        w = copy
+    end
     spec = { name = name, source = source, w = w }
     self.specName = name
     return spec
@@ -157,7 +169,7 @@ DSC.GEM_EFFECTS = {
 -- stats come from GetItemStats on the bare link. Empty sockets are credited with a typical gem, and an active
 -- socket bonus is read from the tooltip (English clients).
 local cache, cacheCount = {}, 0
-function DSC:ClearCache() cache, cacheCount = {}, 0 end
+function DSC:ClearCache() cache, cacheCount = {}, 0; if DSC.capVals then for k in pairs(DSC.capVals) do DSC.capVals[k] = nil end end end
 
 -- names as they appear in "+N <name>" tooltip lines (gems, enchants, socket bonuses) -> stat keys.
 -- English names are listed; the game's own localized stat names are added below, so other languages work too.
@@ -203,6 +215,7 @@ local BONUS_KEY = {
 local scanTip
 -- the active socket bonus of an item, as stat key and amount (English clients; nil when inactive or unknown)
 function DSC:SocketBonus(link)
+    if self.scanTip then scanTip = self.scanTip end
     if not scanTip then
         scanTip = CreateFrame("GameTooltip", "DreamScoreScanTip", nil, "GameTooltipTemplate")
     end
@@ -233,31 +246,101 @@ local function AddStats(into, from)
 end
 
 
+-- ============================================================ set bonuses
+-- "(2) Set: Increases your spell power by 150." -> stats, when the bonus is a plain stat grant. Bonuses with
+-- conditions ("when", "chance", "each time", durations) are effects and are not counted.
+local SET_STATS = {
+    { "ranged attack power by (%d+)", "ITEM_MOD_RANGED_ATTACK_POWER_SHORT" },
+    { "attack power by (%d+)", "ITEM_MOD_ATTACK_POWER_SHORT", skipIf = "ranged attack power by" },
+    { "spell power by (%d+)", "ITEM_MOD_SPELL_POWER_SHORT" },
+    { "critical strike rating by (%d+)", "ITEM_MOD_CRIT_RATING_SHORT" },
+    { "crit rating by (%d+)", "ITEM_MOD_CRIT_RATING_SHORT" },
+    { "haste rating by (%d+)", "ITEM_MOD_HASTE_RATING_SHORT" },
+    { "hit rating by (%d+)", "ITEM_MOD_HIT_RATING_SHORT" },
+    { "expertise rating by (%d+)", "ITEM_MOD_EXPERTISE_RATING_SHORT" },
+    { "armor penetration rating by (%d+)", "ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT" },
+    { "defense rating by (%d+)", "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT" },
+    { "dodge rating by (%d+)", "ITEM_MOD_DODGE_RATING_SHORT" },
+    { "parry rating by (%d+)", "ITEM_MOD_PARRY_RATING_SHORT" },
+    { "block rating by (%d+)", "ITEM_MOD_BLOCK_RATING_SHORT" },
+    { "block value of your shield by (%d+)", "ITEM_MOD_BLOCK_VALUE_SHORT" },
+    { "restores (%d+) mana per 5 sec", "ITEM_MOD_MANA_REGENERATION_SHORT" },
+    { "mana per 5 seconds? by (%d+)", "ITEM_MOD_MANA_REGENERATION_SHORT" },
+    { "your intellect by (%d+)", "ITEM_MOD_INTELLECT_SHORT" },
+    { "your spirit by (%d+)", "ITEM_MOD_SPIRIT_SHORT" },
+    { "your strength by (%d+)", "ITEM_MOD_STRENGTH_SHORT" },
+    { "your agility by (%d+)", "ITEM_MOD_AGILITY_SHORT" },
+    { "your stamina by (%d+)", "ITEM_MOD_STAMINA_SHORT" },
+    { "your armor by (%d+)", "RESISTANCE0_NAME" },
+}
+local SET_CONDITION = { "when", "chance", "each time", "for %d+ sec", "on hit", "after", "whenever", "if you" }
+
+-- the stats of the effect text, or nil when it is not a plain stat grant
+local function ParseSetEffect(text)
+    local t = strlower(text or "")
+    for _, c in ipairs(SET_CONDITION) do if t:find(c) then return nil end end
+    local out
+    for _, d in ipairs(SET_STATS) do
+        local n = t:match(d[1])
+        if n and not (d.skipIf and t:find(d.skipIf)) then
+            out = out or {}
+            out[d[2]] = (out[d[2]] or 0) + tonumber(n)
+        end
+    end
+    return out
+end
+DSC.ParseSetEffect = ParseSetEffect
+
+-- the plain stat bonuses of the set an item belongs to, split over the pieces it takes: a 2-piece bonus counts half
+-- for each of its two pieces, a 3-piece bonus a third, and so on, so what is worn and what is looked at share it
+function DSC:SetBonusStats(link)
+    local lines = self:TooltipLines(link)
+    local out, parsed = {}, 0
+    for _, text in ipairs(lines) do
+        local n, effect = text:match("^%((%d+)%) Set: (.+)$")
+        if n then
+            local stats = ParseSetEffect(effect)
+            if stats then
+                parsed = parsed + 1
+                local pieces = math.max(1, tonumber(n))
+                for k, v in pairs(stats) do out[k] = (out[k] or 0) + v / pieces end
+            end
+        end
+    end
+    return out, parsed
+end
+
 -- the "+N Stat" lines of an item's tooltip as a stat table (gem lines like "+9 Spell Power and +8 Spirit" included)
-function DSC:TooltipStats(link)
-    if not scanTip and self.scanTip then scanTip = self.scanTip end          -- (a test can supply its own)
+function DSC:TooltipLines(link)
+    if self.scanTip then scanTip = self.scanTip end                           -- (a test can supply its own)
     if not scanTip then
         scanTip = CreateFrame("GameTooltip", "DreamScoreScanTip", nil, "GameTooltipTemplate")
     end
     scanTip:SetOwner(UIParent, "ANCHOR_NONE")
     scanTip:ClearLines()
     scanTip:SetHyperlink(link)
-    local out, lines = {}, scanTip:NumLines() or 0
-    for i = 2, lines do
+    local out, n = {}, scanTip:NumLines() or 0
+    for i = 2, n do
         local fs = _G["DreamScoreScanTipTextLeft" .. i]
         local text = fs and fs:GetText()
-        if text then
-            text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-            if text:find("^%+%d") then
-                for seg in (text:gsub(" and ", "|")):gmatch("[^|]+") do
-                    local n, what = seg:match("^%s*%+(%d+) (.-)[%.%s]*$")
-                    local keys = what and NAME_KEY[strlower(what)]
-                    if keys then for _, k in ipairs(keys) do out[k] = (out[k] or 0) + tonumber(n) end end
-                end
+        if text then out[#out + 1] = (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
+    end
+    return out, n > 0
+end
+
+function DSC:TooltipStats(link)
+    local lines, ok = self:TooltipLines(link)
+    local out = {}
+    for _, text in ipairs(lines) do
+        if text:find("^%+%d") then
+            for seg in (text:gsub(" and ", "|")):gmatch("[^|]+") do
+                local n, what = seg:match("^%s*%+(%d+) (.-)[%.%s]*$")
+                local keys = what and NAME_KEY[strlower(what)]
+                if keys then for _, k in ipairs(keys) do out[k] = (out[k] or 0) + tonumber(n) end end
             end
         end
     end
-    return out, lines > 0
+    return out, ok
 end
 
 -- what the gems and the enchant add: the tooltip of the item as it is, minus the tooltip of the bare item
@@ -303,6 +386,7 @@ function DSC:ItemStats(link)
         AddStats(stats, extra)
         if not ok then complete = false end
     end
+    AddStats(stats, (self:SetBonusStats(link)))
     local empty = sockets - filled
     if metaSockets > metaFilled then empty = empty - (metaSockets - metaFilled) end     -- an empty meta socket is not credited
     if empty < 0 then empty = 0 end
@@ -311,9 +395,102 @@ function DSC:ItemStats(link)
     return stats, empty, bonusKey, bonusVal, complete
 end
 
--- returns score  (nil when the item data is not available yet)
-function DSC:Score(link, tip)
-    if not spec or not link then return nil end
+-- ============================================================ hit and defense caps
+-- Past a cap a stat is worth much less. The totals come from the game (gear, gems, buffs, talents), so the room an
+-- item has left depends on everything else you have, not on the item that is being replaced.
+local HIT, DEF = "ITEM_MOD_HIT_RATING_SHORT", "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"
+local HIT_CAPS = {              -- percent: { same level mobs, boss level mobs }
+    melee = { 5, 8 }, ranged = { 5, 8 }, spell = { 4, 17 },
+}
+local WHITE_CAP_DW = 27         -- boss level, dual wielding: white attacks miss 8% + 19%
+local DEF_CAP = 540             -- defense skill that makes you uncrittable by bosses
+local CAP_MODES = { off = true, same = true, boss = true, white = true }
+DSC.CAP_MODES = CAP_MODES
+
+local function SpecKind()
+    if not spec then return "melee" end
+    local _, class = UnitClass("player")
+    if class == "HUNTER" then return "ranged" end
+    local w = spec.w
+    if (w.ITEM_MOD_SPELL_POWER_SHORT or 0) > (w.ITEM_MOD_ATTACK_POWER_SHORT or 0) then return "spell" end
+    return "melee"
+end
+
+local function DualWielding()
+    local link = GetInventoryItemLink("player", 17)
+    if not link then return false end
+    local _, _, _, _, _, _, _, _, loc = GetItemInfo(link)
+    return loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONOFFHAND" or loc == "INVTYPE_WEAPONMAINHAND"
+end
+
+local function WornRating(statKey)          -- the stat summed over the worn items (fallback when the game's totals are unavailable)
+    local sum = 0
+    for _, id in ipairs(SCORED_SLOTS) do
+        local link = GetInventoryItemLink("player", id)
+        local vals = link and DSC.capVals[link]
+        if vals then sum = sum + (vals[statKey] or 0) end
+    end
+    return sum
+end
+
+-- { have = the amount you have now (in %, or skill points), per = rating per % (skill point), cap = the cap }
+function DSC:CapInfo(statKey)
+    local mode = DB().capMode or "boss"
+    if mode == "off" or not spec then return nil end
+    if statKey == HIT then
+        local kind = SpecKind()
+        local crType = (kind == "spell" and CR_HIT_SPELL) or (kind == "ranged" and CR_HIT_RANGED) or CR_HIT_MELEE
+        local per = kind == "spell" and 26.23 or 32.79
+        local have
+        if GetCombatRating and GetCombatRatingBonus and crType then
+            local rating, bonus = GetCombatRating(crType), GetCombatRatingBonus(crType)
+            if rating and bonus and rating > 0 and bonus > 0 then per = rating / bonus end
+            local mod = (kind == "spell" and GetSpellHitModifier and GetSpellHitModifier()) or (kind ~= "spell" and GetHitModifier and GetHitModifier()) or 0
+            have = (bonus or 0) + (mod or 0)
+        else
+            have = WornRating(HIT) / per
+        end
+        local caps = HIT_CAPS[kind]
+        local cap = mode == "same" and caps[1] or caps[2]
+        if mode == "white" and kind ~= "spell" and DualWielding() then cap = WHITE_CAP_DW end
+        return { have = have, per = per, cap = cap }
+    elseif statKey == DEF then
+        if not (spec.w[DEF] and spec.w[DEF] > 0) then return nil end
+        local per, have = 4.9185, nil
+        if UnitDefense then
+            local base, mod = UnitDefense("player")
+            if base then have = base + (mod or 0) end
+        end
+        if CR_DEFENSE_SKILL and GetCombatRating and GetCombatRatingBonus then
+            local rating, bonus = GetCombatRating(CR_DEFENSE_SKILL), GetCombatRatingBonus(CR_DEFENSE_SKILL)
+            if rating and bonus and rating > 0 and bonus > 0 then per = rating / bonus end
+        end
+        if not have then have = 400 + WornRating(DEF) / per end
+        return { have = have, per = per, cap = DEF_CAP }
+    end
+end
+
+-- the part of an item's stat that counts: all of it while there is room under the cap, the rest at a reduced value
+function DSC:Counted(v, replaced, info)
+    local others = info.have - (replaced or 0) / info.per
+    local room = math.max(0, (info.cap - others) * info.per)
+    local floor = (DB().capFloor or 10) / 100
+    return math.min(v, room) + math.max(0, v - room) * floor
+end
+
+DSC.capVals = {}
+local capVals = DSC.capVals
+
+-- the worn items among the links given (an item that is worn replaces itself)
+local function WornSelf(link)
+    for _, id in ipairs(SCORED_SLOTS) do
+        if GetInventoryItemLink("player", id) == link then return true end
+    end
+    return false
+end
+
+-- returns the score without the caps  (nil when the item data is not available yet)
+function DSC:BaseScore(link)
     local hit = cache[link]
     if hit then return hit end
     if DB().itemLevelFallback then
@@ -321,6 +498,7 @@ function DSC:Score(link, tip)
         if loc and FALLBACK_LOC[loc] then
             if not ilvl then return nil end
             cache[link] = ilvl; cacheCount = cacheCount + 1
+            capVals[link] = nil
             return ilvl
         end
     end
@@ -338,10 +516,38 @@ function DSC:Score(link, tip)
         cache[link] = total
         cacheCount = cacheCount + 1
     end
+    capVals[link] = { [HIT] = stats[HIT] or 0, [DEF] = stats[DEF] or 0 }
+    return total
+end
+
+-- replacing: the worn links this item would take the place of (worn items replace themselves)
+function DSC:Score(link, replacing)
+    if not spec or not link then return nil end
+    local total = self:BaseScore(link)
+    if not total then return nil end
+    local vals = capVals[link]
+    if not vals then return total end
+    if not replacing and WornSelf(link) then replacing = { link } end
+    for _, statKey in ipairs({ HIT, DEF }) do
+        local v, w = vals[statKey], spec.w[statKey]
+        if v and v > 0 and w and w > 0 then
+            local info = self:CapInfo(statKey)
+            if info then
+                local replaced = 0
+                for _, r in ipairs(replacing or {}) do
+                    local rv = capVals[r] or (self:BaseScore(r) and capVals[r])
+                    replaced = replaced + (rv and rv[statKey] or 0)
+                end
+                total = total - w * (v - self:Counted(v, replaced, info))
+            end
+        end
+    end
     return total
 end
 
 local function IsEffectLine(text)
+    local setEffect = text:match("^%(%d+%) Set: (.+)$")
+    if setEffect then return DSC.ParseSetEffect(setEffect) == nil end         -- a plain stat set bonus is counted
     if text:find("^Use:") or text:find("Chance on") or text:find("chance to") then return true end
     if text:find("^Equip:") then
         -- plain stat grants: "... rating by 40", "... power by 90", "Restores 12 mana per 5 sec"
@@ -369,17 +575,21 @@ function DSC:Equipped(loc)
     local slots = SLOTS[loc]
     if not slots then return nil end
     if slots.both then      -- two-hander: it replaces main hand and off hand
-        local a = self:Score(GetInventoryItemLink("player", 16)) or 0
-        local b = self:Score(GetInventoryItemLink("player", 17)) or 0
-        return a + b
+        local l1, l2 = GetInventoryItemLink("player", 16), GetInventoryItemLink("player", 17)
+        local a = l1 and self:Score(l1) or 0
+        local b = l2 and self:Score(l2) or 0
+        local repl = {}
+        if l1 then repl[#repl + 1] = l1 end
+        if l2 then repl[#repl + 1] = l2 end
+        return a + b, repl
     end
-    local lowest
+    local lowest, lowLink
     for _, id in ipairs(slots) do
         local link = GetInventoryItemLink("player", id)
         local s = link and self:Score(link) or 0
-        if not lowest or s < lowest then lowest = s end
+        if not lowest or s < lowest then lowest, lowLink = s, link end
     end
-    return lowest
+    return lowest, lowLink and { lowLink } or {}
 end
 
 function DSC:Total()
@@ -403,7 +613,8 @@ local function AddScore(tip)
     if not loc or not SLOTS[loc] then return end
     local usesIlvl = DB().itemLevelFallback and FALLBACK_LOC[loc]
     if loc == "INVTYPE_RELIC" and not usesIlvl then return end      -- relics have no stats to value
-    local score = DSC:Score(link, tip)
+    local worn, replacing = DSC:Equipped(loc)
+    local score = DSC:Score(link, replacing)
     if not score then return end
     tip.dscoreDone = true
     local effect = not usesIlvl and TooltipHasEffect(tip)
@@ -414,7 +625,6 @@ local function AddScore(tip)
         if GetInventoryItemLink("player", id) == link then isWorn = true end
     end
     if DB().compare and not isCompareTip and not isWorn then
-        local worn = DSC:Equipped(loc)
         if worn and worn > 0 then
             local pct = (score - worn) / worn * 100
             local r, g, b = "ff4040", "ff4040", "ff4040"
@@ -425,6 +635,57 @@ local function AddScore(tip)
     tip:AddLine(line)
     if effect then tip:AddLine("|cff888888DreamScore: this item has an effect that is not counted|r") end
     tip:Show()
+end
+
+-- /dscore audit: what DreamScore reads on every piece you wear, and what it leaves out
+local SLOT_LABEL = { [1] = "Head", [2] = "Neck", [3] = "Shoulder", [5] = "Chest", [6] = "Waist", [7] = "Legs", [8] = "Feet",
+    [9] = "Wrist", [10] = "Hands", [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket", [15] = "Back",
+    [16] = "Main hand", [17] = "Off hand", [18] = "Ranged" }
+local function Short(link) return (link:match("%[(.-)%]")) or link end
+
+function DSC:AuditItem(link)
+    local stats, empty, bonusKey, bonusVal, complete = self:ItemStats(link)
+    if not stats then return nil end
+    local counted, unweighted = {}, {}
+    for k, v in pairs(stats) do
+        local w = spec and spec.w[k]
+        local txt = string.format("%s %s", math.floor(v * 10 + 0.5) / 10, DSC.StatName(k))
+        if w and w > 0 then counted[#counted + 1] = txt else unweighted[#unweighted + 1] = txt end
+    end
+    table.sort(counted); table.sort(unweighted)
+    local unread = {}
+    for _, text in ipairs(self:TooltipLines(link)) do
+        if text:find("^%+%d") then
+            for seg in (text:gsub(" and ", "|")):gmatch("[^|]+") do
+                local what = seg:match("^%s*%+%d+ (.-)[%.%s]*$")
+                if what and not NAME_KEY[strlower(what)] then unread[#unread + 1] = seg end
+            end
+        elseif IsEffectLine(text) then
+            unread[#unread + 1] = text:sub(1, 60)
+        end
+    end
+    return { counted = counted, unweighted = unweighted, unread = unread, empty = empty, bonusKey = bonusKey,
+             bonusVal = bonusVal, complete = complete, score = self:Score(link) }
+end
+
+function DSC:Audit()
+    if not spec then DS.Print("DreamScore audit: no weights for your class."); return end
+    DS.Print("DreamScore audit, " .. spec.name .. ": what is read on each worn item")
+    for _, id in ipairs(SCORED_SLOTS) do
+        local link = GetInventoryItemLink("player", id)
+        if link then
+            local a = self:AuditItem(link)
+            if a then
+                DS.Print(string.format("%s: %s = %s%s", SLOT_LABEL[id] or id, Short(link), Fmt(a.score or 0),
+                    a.complete and "" or "  (gem or enchant data still loading)"))
+                if #a.counted > 0 then DS.Print("   counted: " .. table.concat(a.counted, ", ")) end
+                if a.bonusKey then DS.Print(string.format("   socket bonus: +%d %s", a.bonusVal or 0, DSC.StatName(a.bonusKey))) end
+                if a.empty > 0 then DS.Print(string.format("   %d empty socket(s) credited", a.empty)) end
+                if #a.unweighted > 0 then DS.Print("   read but not valued by this spec: " .. table.concat(a.unweighted, ", ")) end
+                if #a.unread > 0 then DS.Print("   |cffff8040not read|r: " .. table.concat(a.unread, " | ")) end
+            end
+        end
+    end
 end
 
 local hooked = false
@@ -486,7 +747,11 @@ function M.OnSlash(msg)
         DS.Print("DreamScore: no weights for your class.")
         return
     end
-    if msg == "upgrades" then
+    if msg == "audit" then
+        DSC:Audit()
+    elseif msg == "specs" or msg == "spec" then
+        if DSC.Weights then DSC.Weights:Show() end
+    elseif msg == "upgrades" then
         if DSC.Hint then DSC.Hint:Kick(); DSC.Hint:Report() end
     elseif msg == "weights" then
         DS.Print("DreamScore weights, " .. spec.name .. " (" .. spec.source .. "):")
@@ -495,32 +760,58 @@ function M.OnSlash(msg)
         table.sort(keys, function(a, b) return spec.w[a] > spec.w[b] or (spec.w[a] == spec.w[b] and a < b) end)
         for _, k in ipairs(keys) do DS.Print(string.format("  %s  %.2f", STAT_NAME[k] or k, spec.w[k])) end
     else
-        DS.Print(string.format("DreamScore, %s: your equipped gear scores %s.  (/dscore weights shows the values)", spec.name, Fmt(DSC:Total())))
+        DS.Print(string.format("DreamScore, %s: your equipped gear scores %s.  (/dscore weights, /dscore specs, /dscore audit, /dscore upgrades)", spec.name, Fmt(DSC:Total())))
     end
 end
 
 M.options = function()
+    local function Kick() if DSC.Hint then DSC.Hint:Kick() end end
     return {
+        { type = "tab", label = "General" },
         { type = "bool", key = "tooltip", label = "Show the score on item tooltips",
           get = function() return DB().tooltip end, set = function(v) DB().tooltip = v and true or false end },
         { type = "bool", key = "compare", label = "Compare with the item you wear",
           desc = "Adds how much better or worse the item is than what you wear in that slot (rings and trinkets: the weaker one).",
           disabled = function() return not DB().tooltip end,
           get = function() return DB().compare end, set = function(v) DB().compare = v and true or false end },
-        { type = "bool", key = "upgradeHint", label = "Upgrade hint (!) on the character window",
-          desc = "A small (!) on a character-window slot when your bags hold a better piece for your spec. Hover shows it, click swaps it in. Armor, jewelry and trinkets; no weapons yet.",
-          get = function() return DB().upgradeHint end,
-          set = function(v) DB().upgradeHint = v and true or false; if DSC.Hint then DSC.Hint:Kick() end end },
-        { type = "bool", key = "itemLevelFallback", label = "Use item level for trinkets and relics",
-          desc = "Trinkets and relics/idols work through effects that stats cannot value. With this on they are scored by their item level instead (the tooltip says so).",
-          get = function() return DB().itemLevelFallback end,
-          set = function(v) DB().itemLevelFallback = v and true or false; DSC:ClearCache(); if DSC.Hint then DSC.Hint:Kick() end end },
         { type = "bool", key = "charTotal", label = "Show your total on the character window",
           desc = "Your total DreamScore, under the trinkets next to the weapon slots.",
           get = function() return DB().charTotal end,
           set = function(v) DB().charTotal = v and true or false; if DSC.Hint then DSC.Hint:UpdateTotal(true) end end },
+        { type = "bool", key = "upgradeHint", label = "Upgrade hint (!) on the character window",
+          desc = "A small (!) on a character-window slot when your bags hold a better piece for your spec. Hover shows it, click swaps it in. Armor, jewelry and trinkets; no weapons yet.",
+          get = function() return DB().upgradeHint end,
+          set = function(v) DB().upgradeHint = v and true or false; Kick() end },
+        { type = "bool", key = "includeBank", label = "Count bank and guild bank items too",
+          desc = "The (!) hint also looks at gear in your bank and guild bank, as it was when you last had those windows open (a guild bank tab counts once you have looked at it). Click does not swap those: take them out first.",
+          disabled = function() return not DB().upgradeHint end,
+          get = function() return DB().includeBank end,
+          set = function(v) DB().includeBank = v and true or false; Kick() end },
+
+        { type = "tab", label = "Scoring" },
+        { type = "bool", key = "hardcore", label = "Hardcore: stamina counts double",
+          desc = "Surviving matters as well as damage. With this on, stamina is worth twice what the spec gives it (at least 0.20 where a spec hardly values it).",
+          get = function() return DB().hardcore end,
+          set = function(v) DB().hardcore = v and true or false; DSC:Detect(); Kick() end },
+        { type = "bool", key = "itemLevelFallback", label = "Use item level for trinkets and relics",
+          desc = "Trinkets and relics/idols work through effects that stats cannot value. With this on they are scored by their item level instead (the tooltip says so).",
+          get = function() return DB().itemLevelFallback end,
+          set = function(v) DB().itemLevelFallback = v and true or false; DSC:ClearCache(); Kick() end },
         { type = "slider", key = "socketValue", label = "Worth of an empty socket", min = 0, max = 30, step = 1,
           desc = "An item with empty sockets is credited with this many points per socket, so it is not unfairly compared with a gemmed one you wear.",
           get = function() return DB().socketValue end, set = function(v) DB().socketValue = v; DSC:ClearCache() end },
+        { type = "choice", key = "capMode", label = "Hit and defense caps",
+          desc = "Hit rating (and defense for tanks) is worth much less once you are past what you need. Your hit from gear, gems, buffs and talents is read from the game. Same level / Boss: the cap against such mobs. White hit: the cap for dual wielders' normal attacks (27%). Casters use their spell hit cap.",
+          values = { "off", "same", "boss", "white" },
+          valueLabels = { off = "Off", same = "Same lvl", boss = "Boss", white = "White hit" },
+          get = function() return DB().capMode end,
+          set = function(v) DB().capMode = v; DSC:ClearCache(); Kick() end },
+        { type = "slider", key = "capFloor", label = "Value past the cap (%)", min = 0, max = 50, step = 5,
+          desc = "How much of its normal weight a point of hit or defense keeps once the cap is reached.",
+          disabled = function() return (DB().capMode or "boss") == "off" end,
+          get = function() return DB().capFloor end, set = function(v) DB().capFloor = v; DSC:ClearCache(); Kick() end },
+
+        { type = "tab", label = "Specs" },
+        { type = "frame", wide = true, height = 372, build = function(parent) return DSC.Weights:NewView(parent, 716) end },
     }
 end

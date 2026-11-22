@@ -41,45 +41,47 @@ function U:Scan(explain)
     if not Active() then return end
     local level = UnitLevel("player") or 1
     local function Why(link, text) if explain then explain[#explain + 1] = link .. ": " .. text end end
+
+    -- one candidate: where = "bags" (bag, slot) or "bank" / "guild" (remembered from the last visit)
+    local function Consider(link, where, bag, slot, label)
+        local _, _, _, _, minLevel, _, sub, _, loc = GetItemInfo(link)
+        local slots = loc and DSC.SLOTS[loc]
+        if not slots then return end                         -- not something you wear
+        if slots.both or loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" or loc == "INVTYPE_SHIELD"
+           or loc == "INVTYPE_WEAPONOFFHAND" or loc == "INVTYPE_HOLDABLE" then
+            Why(link, "weapons and shields are not hinted yet"); return
+        end
+        if (minLevel or 0) > level then Why(link, "needs level " .. minLevel); return end
+        if not Wearable(loc, sub) then Why(link, "armor type " .. tostring(sub) .. " is not one you wear"); return end
+        local score = DSC:Score(link)
+        if not score then Why(link, "stats not readable yet (item not cached)"); return end
+        if score <= 0 then Why(link, "scores 0 for your spec"); return end
+        for _, id in ipairs(slots) do
+            local name = SLOT_NAME[id]
+            local worn = GetInventoryItemLink("player", id)
+            local ws = worn and DSC:Score(worn) or 0
+            local sc = DSC:Score(link, worn and { worn } or {}) or score     -- the caps depend on what it replaces
+            if name and (ws == 0 or sc >= ws * MIN_GAIN) then
+                Why(link, string.format("%s (%s): %.0f vs worn %.0f - counts", name, label or "bags", sc, ws))
+                local cur = best[name]
+                -- an item in the bags wins a tie: it can be swapped in at once
+                if not cur or sc > cur.score or (sc == cur.score and where == "bags" and cur.where ~= "bags") then
+                    best[name] = { where = where, bag = bag, slot = slot, link = link, score = sc, worn = ws, id = id, label = label }
+                end
+            elseif name then
+                Why(link, string.format("%s (%s): %.0f vs worn %.0f - not better", name, label or "bags", sc, ws))
+            end
+        end
+    end
+
     for bag = 0, 4 do
         for slot = 1, (GetContainerNumSlots(bag) or 0) do
             local link = GetContainerItemLink(bag, slot)
-            if link then
-                local _, _, _, _, minLevel, _, sub, _, loc = GetItemInfo(link)
-                local slots = loc and DSC.SLOTS[loc]
-                if not slots then
-                    -- not something you wear
-                elseif slots.both or loc == "INVTYPE_WEAPON" or loc == "INVTYPE_WEAPONMAINHAND" or loc == "INVTYPE_SHIELD"
-                   or loc == "INVTYPE_WEAPONOFFHAND" or loc == "INVTYPE_HOLDABLE" then
-                    Why(link, "weapons and shields are not hinted yet")
-                elseif (minLevel or 0) > level then
-                    Why(link, "needs level " .. minLevel)
-                elseif not Wearable(loc, sub) then
-                    Why(link, "armor type " .. tostring(sub) .. " is not one you wear")
-                else
-                    local score = DSC:Score(link)
-                    if not score then
-                        Why(link, "stats not readable yet (item not cached)")
-                    elseif score <= 0 then
-                        Why(link, "scores 0 for your spec")
-                    else
-                        for _, id in ipairs(slots) do
-                            local name = SLOT_NAME[id]
-                            local worn = GetInventoryItemLink("player", id)
-                            local ws = worn and DSC:Score(worn) or 0
-                            if name and (ws == 0 or score >= ws * MIN_GAIN) then
-                                Why(link, string.format("%s: %.0f vs worn %.0f - counts", name, score, ws))
-                                if not best[name] or score > best[name].score then
-                                    best[name] = { bag = bag, slot = slot, link = link, score = score, worn = ws, id = id }
-                                end
-                            elseif name then
-                                Why(link, string.format("%s: %.0f vs worn %.0f - not better", name, score, ws))
-                            end
-                        end
-                    end
-                end
-            end
+            if link then Consider(link, "bags", bag, slot, "bags") end
         end
+    end
+    if DSC.db().includeBank and DSC.Stash then
+        for _, it in ipairs(DSC.Stash:Items()) do Consider(it.link, it.where, nil, nil, it.label) end
     end
 end
 
@@ -90,13 +92,18 @@ local function ShowTip(btn)
     GameTooltip:SetHyperlink(b.link)
     GameTooltip:AddLine(" ")
     local gain = b.worn > 0 and string.format("  (+%.0f%% DreamScore)", (b.score - b.worn) / b.worn * 100) or ""
-    GameTooltip:AddLine("Upgrade from your bags" .. gain .. " - click to swap it in", HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
+    if b.where == "bags" then
+        GameTooltip:AddLine("Upgrade from your bags" .. gain .. " - click to swap it in", HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
+    else
+        GameTooltip:AddLine("Upgrade in " .. (b.label or "your bank") .. gain .. " (as of your last visit)", HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
+    end
     GameTooltip:Show()
 end
 
 local function Click(btn)
     local b = best[btn.slotName]
     if not b or InCombatLockdown() or CursorHasItem() then return end
+    if b.where ~= "bags" then return end              -- it has to be taken out of the bank first
     if GetContainerItemLink(b.bag, b.slot) ~= b.link then dirtyAt = 0; return end
     PickupContainerItem(b.bag, b.slot)
     PickupInventoryItem(b.id)
