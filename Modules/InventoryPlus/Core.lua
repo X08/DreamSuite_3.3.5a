@@ -116,21 +116,66 @@ local DEFAULTS = {
 -- bag 1 = backpack ... bag 5 = the last bag slot. The Hearthstone is put on the ignore list (ignored items
 -- keep their slot) and moved to slot 1 of bag 1.
 local HEARTHSTONE = 6948
+-- by number of extra bags (the backpack is always there): which categories go to which bag. No extra bags, no setup.
 BT.SUGGESTED = {
-    [0] = { { "Quest" }, { "Reagents" } },
-    [1] = { { "Gear", "Weapons" }, { "Misc" } },
-    [2] = { { "Crafting" } },
-    [3] = { { "Consumables" }, { "Conjured" } },
-    [4] = { { "RawFood" }, { "Junk" } },
+    [1] = { [0] = { "Quest", "Reagents", "Gear", "Weapons", "Misc", "Consumables", "Conjured", "RawFood", "Junk" },
+            [1] = { "Crafting" } },
+    [2] = { [0] = { "Quest", "Reagents", "Gear", "Weapons", "Misc" },
+            [1] = { "Crafting" },
+            [2] = { "Consumables", "Conjured", "RawFood", "Junk" } },
+    [3] = { [0] = { "Quest", "Reagents", "Misc" },
+            [1] = { "Gear", "Weapons" },
+            [2] = { "Crafting" },
+            [3] = { "Consumables", "Conjured", "RawFood", "Junk" } },
+    [4] = { [0] = { "Quest", "Reagents" },
+            [1] = { "Gear", "Weapons", "Misc" },
+            [2] = { "Crafting" },
+            [3] = { "Consumables", "Conjured" },
+            [4] = { "RawFood", "Junk" } },
 }
+BT.SUGGESTED_NAMES = { Quest = "Quest", Reagents = "Reagents", Gear = "Gear", Weapons = "Weapons", Misc = "Miscellaneous",
+    Consumables = "Consumables", Conjured = "Conjured", RawFood = "Raw Food", Junk = "Junk", Crafting = "Crafting" }
+
+-- how many bags sit in the four bag slots right now
+function BT:ExtraBags()
+    local n = 0
+    for bag = 1, 4 do
+        if (GetContainerNumSlots(bag) or 0) > 0 then n = n + 1 end
+    end
+    return n
+end
+
+-- the layout for the bags you carry: bag id -> list of categories, or nil when there are no extra bags
+function BT:SuggestedLayout()
+    local n = self:ExtraBags()
+    local layout = BT.SUGGESTED[n]
+    if not layout then return nil, n end
+    -- the extra bags may sit in any of the four slots: the layout fills the occupied ones in order
+    local out, nextIdx = { [0] = layout[0] }, 1
+    for bag = 1, 4 do
+        if (GetContainerNumSlots(bag) or 0) > 0 then
+            out[bag] = layout[nextIdx]
+            nextIdx = nextIdx + 1
+        end
+    end
+    return out, n
+end
 
 function BT:ApplySuggested()
-    for bag, defs in pairs(BT.SUGGESTED) do
-        local set = {}                       -- one tab per bag, holding every category listed for it
-        for _, cats in ipairs(defs) do
+    local layout = self:SuggestedLayout()
+    if not layout then
+        self:Print("No extra bags equipped: nothing to suggest. Put a bag in a bag slot first.")
+        return
+    end
+    for bag = 0, 4 do                        -- empty bag slots lose their rules too
+        local cats = layout[bag]
+        if cats then
+            local set = {}                   -- one tab per bag, holding every category listed for it
             for _, k in ipairs(cats) do set[k] = true end
+            self.chardb.bags[bag] = { { cats = set } }
+        else
+            self.chardb.bags[bag] = nil
         end
-        self.chardb.bags[bag] = { { cats = set } }
     end
     self.db.ignore[HEARTHSTONE] = true
     for _, bag in ipairs(BT.INV_BAGS) do

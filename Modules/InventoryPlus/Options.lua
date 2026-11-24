@@ -52,7 +52,7 @@ local function Cycle(parent, x, y, width, label, values, get, set)
 end
 
 StaticPopupDialogs["INVENTORYPLUS_SUGGESTED"] = {
-    text = "Replace the tabs on your five bags with the suggested setup?\n\nThe Hearthstone is kept in slot 1 of bag 1. Bank bags are left alone.",
+    text = "Replace the tabs on your bags with the suggested setup for %d extra bag(s)?\n\nThe Hearthstone is kept in slot 1 of the backpack. Bank bags are left alone.",
     button1 = ACCEPT, button2 = CANCEL,
     OnAccept = function() BT:ApplySuggested() end,
     timeout = 0, whileDead = 1, hideOnEscape = 1,
@@ -120,16 +120,29 @@ local function BuildTabsPage(page)
 
     local sug = Button(page, "Suggested setup", 130, 22)
     sug:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 4)
-    sug:SetScript("OnClick", function() StaticPopup_Show("INVENTORYPLUS_SUGGESTED") end)
+    sug:SetScript("OnClick", function()
+        local layout, n = BT:SuggestedLayout()
+        if not layout then BT:Print("No extra bags equipped: nothing to suggest. Put a bag in a bag slot first."); return end
+        StaticPopup_Show("INVENTORYPLUS_SUGGESTED", n)
+    end)
     sug:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Suggested setup", 1, 0.82, 0)
-        GameTooltip:AddLine("Bag 1: Quest + Reagents (Hearthstone kept in slot 1)", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 2: Gear + Weapons + Miscellaneous", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 3: Crafting", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 4: Consumables + Conjured", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("Bag 5: Raw Food + Junk", 0.9, 0.9, 0.9)
-        GameTooltip:AddLine("One tab per bag, holding all of the above. Replaces the tabs on your five bags. Bank bags are left alone.", 1, 0.6, 0.3, true)
+        local layout, n = BT:SuggestedLayout()
+        if not layout then
+            GameTooltip:AddLine("No extra bags equipped, so nothing is suggested. The setup depends on how many bags you carry (1 to 4).", 1, 0.6, 0.3, true)
+        else
+            GameTooltip:AddLine(n .. " extra bag" .. (n == 1 and "" or "s") .. " equipped:", 0.9, 0.9, 0.9)
+            for bag = 0, 4 do
+                local cats = layout[bag]
+                if cats then
+                    local names = {}
+                    for _, k in ipairs(cats) do names[#names + 1] = BT.SUGGESTED_NAMES[k] or k end
+                    GameTooltip:AddLine((bag == 0 and "Backpack: " or ("Bag " .. bag .. ": ")) .. table.concat(names, " + "), 0.9, 0.9, 0.9)
+                end
+            end
+            GameTooltip:AddLine("Hearthstone kept in slot 1 of the backpack. One tab per bag, holding all of the above. Replaces the tabs on your bags; bank bags are left alone.", 1, 0.6, 0.3, true)
+        end
         GameTooltip:Show()
     end)
     sug:SetScript("OnLeave", function() GameTooltip:Hide() end)

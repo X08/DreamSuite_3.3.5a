@@ -142,6 +142,33 @@ end
 
 -- total DreamScore on the character window: below the trinkets, beside the weapon slots
 local totalFs
+function U:ShowPriority(owner)
+    local spec = DSC:Spec()
+    if not spec then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("DreamScore: " .. (DSC.specName or spec.name), 1, 0.82, 0)
+    local keys = {}
+    for k, v in pairs(spec.w) do if v > 0 then keys[#keys + 1] = k end end
+    table.sort(keys, function(x, y) return spec.w[x] > spec.w[y] or (spec.w[x] == spec.w[y] and x < y) end)
+    GameTooltip:AddLine("Stat priority (weight)", 0.7, 0.7, 0.7)
+    for i, k in ipairs(keys) do
+        GameTooltip:AddDoubleLine(i .. ". " .. DSC.StatName(k), string.format("%.2f", spec.w[k]), 1, 1, 1, 0.8, 0.8, 0.8)
+    end
+    for _, key in ipairs({ "ITEM_MOD_HIT_RATING_SHORT", "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT" }) do
+        local info = spec.w[key] and DSC:CapInfo(key)
+        if info then
+            local isHit = key == "ITEM_MOD_HIT_RATING_SHORT"
+            GameTooltip:AddDoubleLine(isHit and "Hit now / cap" or "Defense now / cap",
+                string.format(isHit and "%.1f%% / %.0f%%" or "%d / %d", info.have, info.cap), 0.6, 0.8, 1, 0.6, 0.8, 1)
+        end
+    end
+    if DSC.db().hardcore then
+        GameTooltip:AddLine("Hardcore: stamina x" .. (DSC.db().hardcoreMult or 2), 1, 0.5, 0.3)
+    end
+    GameTooltip:AddLine("/dscore specs shows every spec", 0.5, 0.5, 0.5)
+    GameTooltip:Show()
+end
+
 function U:UpdateTotal(force)
     if not totalFs then
         if not CharacterFrame or not CharacterTrinket1Slot then return end
@@ -161,6 +188,14 @@ function U:UpdateTotal(force)
             totalFs:SetPoint("TOP", CharacterTrinket1Slot, "BOTTOM", -4, 9)
         end
         totalFs:SetJustifyH("CENTER")
+        -- hovering the total shows the priority list of the spec it is scored with
+        local hot = CreateFrame("Frame", nil, holder)
+        hot:SetAllPoints(totalFs)
+        hot:EnableMouse(true)
+        hot:SetFrameLevel(holder:GetFrameLevel() + 1)
+        hot:SetScript("OnEnter", function(self) U:ShowPriority(self) end)
+        hot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        U.totalHot = hot
     end
     local on = M.active and DSC.db().charTotal and DSC:Spec() ~= nil
     if not on then totalFs:SetText(""); totalFs:Hide(); return end

@@ -29,7 +29,15 @@ local STAT_NAME = {
     ITEM_MOD_MANA_REGENERATION_SHORT = "mp5", ITEM_MOD_SPELL_POWER_SHORT = "spell power",
     ITEM_MOD_HEALING_POWER_SHORT = "healing power", ITEM_MOD_HASTE_RATING_SHORT = "haste",
     ITEM_MOD_INTELLECT_SHORT = "intellect", ITEM_MOD_SPIRIT_SHORT = "spirit",
-    ITEM_MOD_CRIT_RATING_SHORT = "crit",
+    ITEM_MOD_CRIT_RATING_SHORT = "crit", RESISTANCE0_NAME = "armor",
+    ITEM_MOD_ATTACK_POWER_SHORT = "attack power", ITEM_MOD_RANGED_ATTACK_POWER_SHORT = "ranged attack power",
+    ITEM_MOD_FERAL_ATTACK_POWER_SHORT = "feral attack power", ITEM_MOD_STRENGTH_SHORT = "strength",
+    ITEM_MOD_AGILITY_SHORT = "agility", ITEM_MOD_STAMINA_SHORT = "stamina",
+    ITEM_MOD_HIT_RATING_SHORT = "hit", ITEM_MOD_EXPERTISE_RATING_SHORT = "expertise",
+    ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = "armor penetration", ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "defense",
+    ITEM_MOD_DODGE_RATING_SHORT = "dodge", ITEM_MOD_PARRY_RATING_SHORT = "parry",
+    ITEM_MOD_BLOCK_RATING_SHORT = "block rating", ITEM_MOD_BLOCK_VALUE_SHORT = "block value",
+    ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "weapon DPS",
 }
 setmetatable(STAT_NAME, { __index = function(_, k) return (k:gsub("^ITEM_MOD_", ""):gsub("_SHORT$", ""):gsub("_", " "):lower()) end })
 
@@ -53,7 +61,7 @@ local FALLBACK_LOC = { INVTYPE_TRINKET = true, INVTYPE_RELIC = true }   -- effec
 local TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }
 
 -- ============================================================ settings
-local defaults = { tooltip = true, compare = true, socketValue = 18, upgradeHint = true, itemLevelFallback = false, charTotal = true, hardcore = false, includeBank = true, capMode = "boss", capFloor = 10 }
+local defaults = { tooltip = true, compare = true, socketValue = 18, upgradeHint = true, itemLevelFallback = false, charTotal = true, hardcore = false, hardcoreMult = 2, effects = true, includeBank = true, capMode = "boss", capFloor = 10 }
 local db
 local function DB()
     if not db then db = DS.GetDB("DreamScore", defaults) end
@@ -142,10 +150,10 @@ function DSC:Detect()
         source = string.format("%d%% %s, the rest the average of all three specs (%d of %d points)",
             math.floor(commit * 100 + 0.5), entries[best].name, bestPoints, DSC.FULL_POINTS)
     end
-    if DB().hardcore then       -- hardcore: it is not all about damage, so stamina counts double (and never nothing)
+    if DB().hardcore then       -- hardcore: it is not all about damage, so stamina counts more (default double, and never nothing)
         local copy = {}
         for k2, v2 in pairs(w) do copy[k2] = v2 end
-        copy.ITEM_MOD_STAMINA_SHORT = math.max((w.ITEM_MOD_STAMINA_SHORT or 0) * 2, DSC.HARDCORE_MIN)
+        copy.ITEM_MOD_STAMINA_SHORT = math.max((w.ITEM_MOD_STAMINA_SHORT or 0) * (DB().hardcoreMult or 2), DSC.HARDCORE_MIN)
         w = copy
     end
     spec = { name = name, source = source, w = w }
@@ -239,6 +247,7 @@ function DSC:SocketBonus(link)
     end
 end
 
+DSC.NAME_KEY = NAME_KEY
 local function AddStats(into, from)
     for k, v in pairs(from) do
         if type(k) == "string" and not k:find("^EMPTY_SOCKET_") and type(v) == "number" then into[k] = (into[k] or 0) + v end
@@ -311,7 +320,7 @@ function DSC:SetBonusStats(link)
 end
 
 -- the "+N Stat" lines of an item's tooltip as a stat table (gem lines like "+9 Spell Power and +8 Spirit" included)
-function DSC:TooltipLines(link)
+function DSC:TooltipLines(link, withRight)
     if self.scanTip then scanTip = self.scanTip end                           -- (a test can supply its own)
     if not scanTip then
         scanTip = CreateFrame("GameTooltip", "DreamScoreScanTip", nil, "GameTooltipTemplate")
@@ -323,6 +332,11 @@ function DSC:TooltipLines(link)
     for i = 2, n do
         local fs = _G["DreamScoreScanTipTextLeft" .. i]
         local text = fs and fs:GetText()
+        if text and withRight then      -- the cooldown of a Use: effect can sit on the right
+            local rs = _G["DreamScoreScanTipTextRight" .. i]
+            local right = rs and rs:GetText()
+            if right and right ~= "" and right:lower():find("cooldown") then text = text .. " (" .. right .. ")" end
+        end
         if text then out[#out + 1] = (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
     end
     return out, n > 0
@@ -387,6 +401,7 @@ function DSC:ItemStats(link)
         if not ok then complete = false end
     end
     AddStats(stats, (self:SetBonusStats(link)))
+    if DB().effects and DSC.Effects then AddStats(stats, (DSC.Effects:Stats(link))) end
     local empty = sockets - filled
     if metaSockets > metaFilled then empty = empty - (metaSockets - metaFilled) end     -- an empty meta socket is not credited
     if empty < 0 then empty = 0 end
@@ -453,7 +468,13 @@ function DSC:CapInfo(statKey)
         local caps = HIT_CAPS[kind]
         local cap = mode == "same" and caps[1] or caps[2]
         if mode == "white" and kind ~= "spell" and DualWielding() then cap = WHITE_CAP_DW end
-        return { have = have, per = per, cap = cap }
+        local info = { have = have, per = per, cap = cap }
+        -- Enhancement casts too: past the melee cap hit rating is still worth half until about 14% spell hit
+        -- (spell hit takes 26.23 rating per 1%, melee 32.79, so the same rating gives more spell hit than melee hit)
+        if kind == "melee" and spec.name and strfind(spec.name, "^Enhancement") and mode ~= "same" then
+            info.cap2 = 14 * 26.23 / per
+        end
+        return info
     elseif statKey == DEF then
         if not (spec.w[DEF] and spec.w[DEF] > 0) then return nil end
         local per, have = 4.9185, nil
@@ -475,7 +496,11 @@ function DSC:Counted(v, replaced, info)
     local others = info.have - (replaced or 0) / info.per
     local room = math.max(0, (info.cap - others) * info.per)
     local floor = (DB().capFloor or 10) / 100
-    return math.min(v, room) + math.max(0, v - room) * floor
+    local mid = 0
+    if info.cap2 and info.cap2 > info.cap then
+        mid = math.min(math.max(0, v - room), math.max(0, (info.cap2 - others) * info.per - room))
+    end
+    return math.min(v, room) + mid * 0.5 + math.max(0, v - room - mid) * floor
 end
 
 DSC.capVals = {}
@@ -548,6 +573,7 @@ end
 local function IsEffectLine(text)
     local setEffect = text:match("^%(%d+%) Set: (.+)$")
     if setEffect then return DSC.ParseSetEffect(setEffect) == nil end         -- a plain stat set bonus is counted
+    if DB().effects and DSC.Effects and DSC.Effects.Parse(text) then return false end      -- an effect that was turned into stats
     if text:find("^Use:") or text:find("Chance on") or text:find("chance to") then return true end
     if text:find("^Equip:") then
         -- plain stat grants: "... rating by 40", "... power by 90", "Restores 12 mana per 5 sec"
@@ -565,7 +591,13 @@ local function TooltipHasEffect(tip)
     for i = 2, (tip:NumLines() or 0) do
         local fs = _G[name .. "TextLeft" .. i]
         local t = fs and fs:GetText()
-        if t and IsEffectLine(t) then return true end
+        if t then
+            local rs = _G[name .. "TextRight" .. i]
+            local right = rs and rs:GetText()
+            if right and right ~= "" and right:lower():find("cooldown") then t = t .. " (" .. right .. ")" end   -- Use: cooldown on the right
+            t = t:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            if IsEffectLine(t) then return true end
+        end
     end
     return false
 end
@@ -654,7 +686,7 @@ function DSC:AuditItem(link)
     end
     table.sort(counted); table.sort(unweighted)
     local unread = {}
-    for _, text in ipairs(self:TooltipLines(link)) do
+    for _, text in ipairs(self:TooltipLines(link, true)) do
         if text:find("^%+%d") then
             for seg in (text:gsub(" and ", "|")):gmatch("[^|]+") do
                 local what = seg:match("^%s*%+%d+ (.-)[%.%s]*$")
@@ -701,6 +733,73 @@ local function Hook()
     end
 end
 
+-- ============================================================ hardcore detection
+-- ChromieCraft documents no buff for its Hardcore challenge, so this matches any buff with "hardcore" in its name.
+-- It asks once per character; /dscore hardcore asks again.
+local function HardcoreAura()
+    for i = 1, 40 do
+        local name = UnitBuff("player", i)
+        if not name then return nil end
+        if strfind(strlower(name), "hardcore", 1, true) then return name end
+    end
+end
+DSC.HardcoreAura = HardcoreAura
+
+local hcFrame
+function DSC:AskHardcore(auraName)
+    if not hcFrame then
+        local f = CreateFrame("Frame", "DreamScoreHardcoreFrame", UIParent)
+        f:SetSize(330, 170); f:SetPoint("CENTER", 0, 120); f:SetFrameStrata("DIALOG")
+        f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 } })
+        f:EnableMouse(true); f:SetMovable(true); f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving); f:SetScript("OnDragStop", f.StopMovingOrSizing)
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal"); f.title:SetPoint("TOP", 0, -16)
+        f.title:SetText("DreamScore: Hardcore")
+        f.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        f.text:SetPoint("TOP", 0, -38); f.text:SetWidth(290); f.text:SetJustifyH("CENTER")
+        local sl = CreateFrame("Slider", "DreamScoreHardcoreSlider", f, "OptionsSliderTemplate")
+        sl:SetPoint("TOP", 0, -92); sl:SetWidth(240); sl:SetMinMaxValues(1, 4); sl:SetValueStep(0.5)
+        _G[sl:GetName() .. "Low"]:SetText("1x"); _G[sl:GetName() .. "High"]:SetText("4x")
+        sl:SetScript("OnValueChanged", function(self, v)
+            v = math.floor(v * 2 + 0.5) / 2
+            _G[self:GetName() .. "Text"]:SetText("Stamina counts " .. v .. "x")
+            self.value = v
+        end)
+        f.slider = sl
+        local ok = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        ok:SetSize(120, 22); ok:SetPoint("BOTTOMLEFT", 24, 18); ok:SetText("Use Hardcore")
+        ok:SetScript("OnClick", function()
+            DB().hardcore = true; DB().hardcoreMult = f.slider.value or 2
+            f:Hide(); DSC:Detect(); DSC:ClearCache()
+            if DSC.Hint then DSC.Hint:Kick(); DSC.Hint:UpdateTotal() end
+        end)
+        local no = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        no:SetSize(120, 22); no:SetPoint("BOTTOMRIGHT", -24, 18); no:SetText("Not now")
+        no:SetScript("OnClick", function() f:Hide() end)
+        tinsert(UISpecialFrames, "DreamScoreHardcoreFrame")
+        hcFrame = f
+    end
+    hcFrame.text:SetText(auraName and ("You have the buff \"" .. auraName .. "\". Count stamina higher in scores? (Surviving matters on a Hardcore run.)")
+        or "Count stamina higher in your scores? (Surviving matters on a Hardcore run.)")
+    hcFrame.slider:SetValue(DB().hardcoreMult or 2)
+    hcFrame:Show()
+end
+
+-- once per character, when the buff is seen and Hardcore scoring is still off
+function DSC:CheckHardcore()
+    if DB().hardcore or InCombatLockdown() then return end
+    local d = DB()
+    d.hcAsked = d.hcAsked or {}
+    local key = (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")
+    if d.hcAsked[key] then return end
+    local aura = HardcoreAura()
+    if aura then
+        d.hcAsked[key] = true
+        self:AskHardcore(aura)
+    end
+end
+
 -- ============================================================ events, slash, options
 local frame = CreateFrame("Frame")
 -- Talent and item data can arrive late after logging in or a loading screen, so every trigger also starts a
@@ -709,10 +808,15 @@ local SETTLE = 10
 local settleLeft, settleTick = 0, 0
 local function Refresh()
     DSC:Detect()
+    DSC:CheckHardcore()
     if DSC.Hint then DSC.Hint:Kick(); DSC.Hint:UpdateTotal() end
 end
-frame:SetScript("OnEvent", function()
+frame:SetScript("OnEvent", function(_, event, unit)
     if not M.active then return end
+    if event == "UNIT_AURA" then
+        if unit == "player" then DSC:CheckHardcore() end
+        return
+    end
     settleLeft, settleTick = SETTLE, 0
     Refresh()
 end)
@@ -728,7 +832,7 @@ function M.OnEnable()
     settleLeft, settleTick = SETTLE, 0
     DSC:Detect()
     Hook()
-    for _, e in ipairs({ "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGIN" }) do
+    for _, e in ipairs({ "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGIN", "UNIT_AURA" }) do
         frame:RegisterEvent(e)
     end
     if DSC.Hint then DSC.Hint:On() end
@@ -751,6 +855,8 @@ function M.OnSlash(msg)
         DSC:Audit()
     elseif msg == "specs" or msg == "spec" then
         if DSC.Weights then DSC.Weights:Show() end
+    elseif msg == "hardcore" then
+        DSC:AskHardcore(HardcoreAura())
     elseif msg == "upgrades" then
         if DSC.Hint then DSC.Hint:Kick(); DSC.Hint:Report() end
     elseif msg == "weights" then
@@ -760,7 +866,7 @@ function M.OnSlash(msg)
         table.sort(keys, function(a, b) return spec.w[a] > spec.w[b] or (spec.w[a] == spec.w[b] and a < b) end)
         for _, k in ipairs(keys) do DS.Print(string.format("  %s  %.2f", STAT_NAME[k] or k, spec.w[k])) end
     else
-        DS.Print(string.format("DreamScore, %s: your equipped gear scores %s.  (/dscore weights, /dscore specs, /dscore audit, /dscore upgrades)", spec.name, Fmt(DSC:Total())))
+        DS.Print(string.format("DreamScore, %s: your equipped gear scores %s.  (/dscore weights, /dscore specs, /dscore audit, /dscore upgrades, /dscore hardcore)", spec.name, Fmt(DSC:Total())))
     end
 end
 
@@ -789,14 +895,23 @@ M.options = function()
           set = function(v) DB().includeBank = v and true or false; Kick() end },
 
         { type = "tab", label = "Scoring" },
-        { type = "bool", key = "hardcore", label = "Hardcore: stamina counts double",
-          desc = "Surviving matters as well as damage. With this on, stamina is worth twice what the spec gives it (at least 0.20 where a spec hardly values it).",
+        { type = "bool", key = "hardcore", label = "Hardcore: stamina counts more",
+          desc = "Surviving matters as well as damage. With this on, stamina is worth the chosen multiple of what the spec gives it (at least 0.20 where a spec hardly values it).",
           get = function() return DB().hardcore end,
-          set = function(v) DB().hardcore = v and true or false; DSC:Detect(); Kick() end },
+          set = function(v) DB().hardcore = v and true or false; DSC:Detect(); DSC:ClearCache(); Kick() end },
+        { type = "slider", key = "hardcoreMult", label = "Hardcore stamina multiplier", min = 1, max = 4, step = 0.5,
+          desc = "How many times the spec's stamina weight counts while Hardcore is on. 2 = double.",
+          disabled = function() return not DB().hardcore end,
+          get = function() return DB().hardcoreMult or 2 end,
+          set = function(v) DB().hardcoreMult = v; DSC:Detect(); DSC:ClearCache(); Kick() end },
         { type = "bool", key = "itemLevelFallback", label = "Use item level for trinkets and relics",
           desc = "Trinkets and relics/idols work through effects that stats cannot value. With this on they are scored by their item level instead (the tooltip says so).",
           get = function() return DB().itemLevelFallback end,
           set = function(v) DB().itemLevelFallback = v and true or false; DSC:ClearCache(); Kick() end },
+        { type = "bool", key = "effects", label = "Count Use: and proc effects",
+          desc = "Trinkets and weapons that grant a stat for a while: the amount is averaged over how often it can happen (amount x seconds it lasts / seconds between uses or procs) and weighed like a normal stat. Procs are read when the tooltip gives their chance and cooldown or procs per minute. Healing and damage effects cannot be counted.",
+          get = function() return DB().effects end,
+          set = function(v) DB().effects = v and true or false; DSC:ClearCache(); Kick() end },
         { type = "slider", key = "socketValue", label = "Worth of an empty socket", min = 0, max = 30, step = 1,
           desc = "An item with empty sockets is credited with this many points per socket, so it is not unfairly compared with a gemmed one you wear.",
           get = function() return DB().socketValue end, set = function(v) DB().socketValue = v; DSC:ClearCache() end },

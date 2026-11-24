@@ -179,6 +179,17 @@ local function AltsText(id)
     return " (alts: " .. table.concat(parts, ", ") .. ")"
 end
 
+-- how many of an item your other characters hold in total (bags, bank, worn), 0 without Warehouse data
+local function AltsTotal(id)
+    local ip = rawget(_G, "InventoryPlus")
+    if not (id and ip and ip.db and ip.db.chars and ip.WH and ip.WH.Holders) then return 0 end
+    local ok, holders = pcall(ip.WH.Holders, ip.WH, id, ip.WH:Key())
+    if not ok or not holders then return 0 end
+    local n = 0
+    for _, h in ipairs(holders) do n = n + h.b + h.k + h.e end
+    return n
+end
+
 -- always a real hyperlink: the stored one, else one built from the id (the game resolves it by itself)
 local function ItemLink(id, stored, name)
     if stored and stored:find("|H") then return stored end
@@ -195,7 +206,7 @@ end
 -- and the chat limit is 255 characters).
 local MAX_LINKS = 3
 local function MaterialLines(prof, rec, spell)
-    local parts, canMake = {}, nil
+    local parts, canMake, canWithAlts = {}, nil, nil
     for _, rg in ipairs(rec.r) do
         local id, need, name = rg[1], rg[2], rg[3]
         local have, withBank = HaveCount(id, name)
@@ -205,6 +216,8 @@ local function MaterialLines(prof, rec, spell)
         parts[#parts + 1] = t
         local k = math.floor(have / math.max(need, 1))
         if not canMake or k < canMake then canMake = k end
+        local ka = math.floor((withBank + AltsTotal(id)) / math.max(need, 1))
+        if not canWithAlts or ka < canWithAlts then canWithAlts = ka end
     end
     local PRE = "[CraftLinker] "
     local made = rec.it and ItemLink(rec.it, rec.l, rec.n)
@@ -222,7 +235,11 @@ local function MaterialLines(prof, rec, spell)
     if #parts == 0 then cur = cur .. "no materials listed" end
     if cur ~= PRE then lines[#lines + 1] = cur end
     if canMake then
-        lines[#lines + 1] = canMake > 0 and (PRE .. "Enough for " .. canMake .. " right now.") or (PRE .. "Can't make it right now.")
+        local text = canMake > 0 and ("Enough for " .. canMake .. " right now") or "Can't make it right now"
+        if canWithAlts and canWithAlts > canMake then
+            text = text .. "; " .. canWithAlts .. " with the bank and my other characters' stock"
+        end
+        lines[#lines + 1] = PRE .. text .. "."
     end
     return lines
 end

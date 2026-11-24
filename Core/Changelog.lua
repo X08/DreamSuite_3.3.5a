@@ -1,6 +1,21 @@
 -- generated from CHANGELOG.md by gen_changelog.py; do not edit by hand
 local DS = DreamSuite
 DS.CHANGELOG = {
+  { ver = "0.11.41.45", date = "2026-11-24 22:21", items = {
+    { "c", "InventoryPlus: the Suggested setup follows the number of bags you carry. No extra bags, no suggestion. With 1 extra bag the backpack takes everything and the bag takes Crafting; 2 bags: backpack Quest, Reagents, Gear, Weapons and Misc, Crafting, then Consumables, Conjured, Raw Food and Junk; 3 and 4 bags split it further. The button's tooltip shows what you would get" },
+    { "c", "DreamScore: hover the score on the character window to see the stat priority of your spec (weights, hit and defense caps)" },
+    { "c", "DreamScore: hit caps are separate for melee, ranged and spell (spell hit needs 26.23 rating per 1%, melee and ranged 32.79; caps 8%, 8% and 17%). Enhancement shamans also cast: hit past the melee cap still counts half up to about 14% spell hit" },
+    { "c", "DreamScore: when a buff with \"Hardcore\" in its name is seen, a window asks once per character whether stamina should count higher and by how much (/dscore hardcore opens it again). ChromieCraft documents no such buff, so the name match is a guess" },
+    { "c", "DreamScore weights checked against more sources: WoWSims default EP weights, Wowhead and 2010 Engadget guides. Where they disagreed with the weights they were adjusted (Fury, Frost and Unholy DK, Blood, Protection paladin, bear, Resto druid crit and others); the Specs tab lists the sources per spec. Resto druid no longer counts healing power on top of spell power" },
+    { "c", "CraftLinker: the materials whisper also says how many crafts the bank and your other characters' stock would cover (from the InventoryPlus Warehouse)" },
+  } },
+  { ver = "0.11.40.45", date = "2026-11-24 11:40", items = {
+    { "c", "DreamScore weights re-checked against Icy Veins and Warcraft Tavern pages for all classes (the guide each spec rests on is listed in the Specs tab). Corrected where the order disagreed with the guides: Arms and Fury put armor penetration higher, Fury and Frost DK expertise/hit higher, Protection warrior/paladin and Blood DK defensive stats re-ordered, Holy paladin haste and mp5 above spell power, Enhancement intellect/spell power above crit, Shadow, Fire, Frost mages: spirit above intellect, Elemental haste, Restoration shaman haste/mp5/crit, bear dodge lowered. Arms, Combat and Restoration shaman sources now say plainly that only Icy Veins was read" },
+    { "d", "DreamScore showed some stats under their internal names (RESISTANCE0_NAME for armor). All weighted stats now have readable names in the Specs tab, /dscore weights and /dscore audit" },
+  } },
+  { ver = "0.11.39.44", date = "2026-11-23 00:53", items = {
+    { "c", "DreamScore counts effects that come and go: a Use: effect that grants a stat for a while (\\\"Increases your attack power by 278 for 20 sec, 2 Min Cooldown\\\") and procs whose tooltip gives their chance and cooldown or procs per minute are turned into the average amount of that stat (amount x seconds it lasts / seconds between uses or procs) and weighed like a normal stat. Mana restores count as mana per 5 sec. Healing and damage effects, and procs without numbers, stay uncounted. Switch: Count Use: and proc effects (Scoring tab)" },
+  } },
   { ver = "0.11.38.44", date = "2026-11-23 00:40", items = {
     { "c", "DreamScore settings are split into three tabs: General, Scoring and Specs. The weights of every class and spec are now the Specs tab (/dscore specs still opens them in a window). Settings pages can hold a custom view for this" },
     { "c", "DreamScore: Hardcore is one tick that doubles the stamina weight of your spec (at least 0.20 for specs that hardly value it); the separate stamina slider is gone" },
